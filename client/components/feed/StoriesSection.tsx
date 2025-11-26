@@ -6,8 +6,6 @@ import { useGetAllStoriesQuery } from "@/services/storyApi";
 export default function StoriesSection() {
   const router = useRouter();
   const { data, isLoading, error } = useGetAllStoriesQuery(undefined);
-
-  // Afficher un loader pendant le chargement
   if (isLoading) {
     return (
       <View className="px-4 my-4">
@@ -19,8 +17,6 @@ export default function StoriesSection() {
       </View>
     );
   }
-
-  // Gérer les erreurs
   if (error) {
     return (
       <View className="px-4 my-4">
@@ -29,10 +25,8 @@ export default function StoriesSection() {
     );
   }
 
-  // Extraire les stories depuis la réponse
   const stories = data?.data?.stories || [];
 
-  // Si aucune story, ne rien afficher
   if (stories.length === 0) {
     return null;
   }

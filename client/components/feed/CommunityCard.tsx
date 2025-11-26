@@ -1,17 +1,9 @@
 import { View, Text, Image, TouchableOpacity } from "react-native";
 import { UserRoundPlus } from "lucide-react-native";
 import { useRouter } from "expo-router";
+import type { CommunityCardProps } from "@/types/interfaces";
 
-interface CommunityCardProps {
-  id: number;
-  name: string;
-  followers: string;
-  avatar: string;
-  image: string;
-  variant?: "horizontal" | "grid";
-}
-
-export default function CommunityCard({ id, name, followers, avatar, image, variant = "horizontal" }: CommunityCardProps) {
+export default function CommunityCard({ id, name, followers, avatar, image, variant = "horizontal", isMember = false, onJoin }: CommunityCardProps) {
   const router = useRouter();
   const containerClass = variant === "grid" 
     ? "border border-gray-200 rounded-2xl pb-2" 
@@ -19,7 +11,7 @@ export default function CommunityCard({ id, name, followers, avatar, image, vari
   return (
     <TouchableOpacity 
       className={containerClass}
-      onPress={() => router.push(`/community/${id}`)}
+      onPress={() => router.push(`/community/${id}?communityName=${encodeURIComponent(name)}` as any)}
     >
       <View className="relative">
         <View className="relative h-28 w-full overflow-hidden rounded-2xl mb-2">
@@ -33,10 +25,12 @@ export default function CommunityCard({ id, name, followers, avatar, image, vari
       <View className="flex flex-col items-center mt-5">
         <Text className="font-semibold text-sm">{name}</Text>
         <Text className="text-gray-500 text-xs">{followers}</Text>
-        <TouchableOpacity className="mt-2 py-1 flex-row items-center justify-center gap-1">
-          <UserRoundPlus size={15} color="#E72858" className="font-bold" />
-          <Text className="text-pink-500 text-md font-bold ml-2">Join</Text>
-        </TouchableOpacity>
+        { !isMember && onJoin ? (
+          <TouchableOpacity className="mt-2 py-1 flex-row items-center justify-center gap-1" onPress={() => onJoin(id)}>
+            <UserRoundPlus size={15} color="#E72858" className="font-bold" />
+            <Text className="text-pink-500 text-md font-bold ml-2">Join</Text>
+          </TouchableOpacity>
+        ) : null }
       </View>
     </TouchableOpacity>
   );

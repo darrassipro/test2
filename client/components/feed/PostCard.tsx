@@ -3,6 +3,7 @@ import { Play, MessageCircleIcon, Bookmark } from "lucide-react-native";
 import icons from "@/constants/icons";
 import { useRef, useState } from "react";
 import { useRouter } from "expo-router";
+import type { Post, PostCardProps } from "@/types/interfaces";
 
 function formatCount(num: number): string {
   if (num >= 1e9) return `${parseFloat((num / 1e9).toFixed(1)).toString().replace(/\.0$/, "")}B`;
@@ -11,26 +12,6 @@ function formatCount(num: number): string {
   return String(num);
 }
 
-interface Post {
-  id: number;
-  username: string;
-  location?: string;
-  avatar: string;
-  image: string;
-  likes: number;
-  comments: number;
-  shares: number;
-  verified: boolean;
-  isLiked: boolean;
-  timeAgo?: string;
-  hasBookButton?: boolean;
-  isVideo?: boolean;
-}
-
-interface PostCardProps {
-  post: Post;
-  onLike?: (postId: number) => void;
-}
 
 export default function PostCard({ post, onLike }: PostCardProps) {
   const router = useRouter();
@@ -38,16 +19,17 @@ export default function PostCard({ post, onLike }: PostCardProps) {
   const scale = useRef(new Animated.Value(0)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const singleTapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [isLiked, setIsLiked] = useState(post.isLiked);
-  const [likes, setLikes] = useState(post.likes);
+  const [isLiked, setIsLiked] = useState<boolean>(!!post.isLiked);
+  const [likes, setLikes] = useState<number>(post.likes ?? 0);
 
-  const toggleLike = (postId: number) => {
-    setIsLiked(!isLiked);
-    setLikes(isLiked ? likes - 1 : likes + 1);
+  const toggleLike = (postId: string | number) => {
+    setIsLiked(prev => !prev);
+    setLikes(prev => (isLiked ? Math.max(0, prev - 1) : prev + 1));
     if (onLike) onLike(postId);
   };
 
-  const triggerLikeAnimation = (postId: number) => {
+
+  const triggerLikeAnimation = (postId: string | number) => {
     overlayOpacity.setValue(0);
     scale.setValue(0.5);
     Animated.parallel([
@@ -58,7 +40,7 @@ export default function PostCard({ post, onLike }: PostCardProps) {
     });
   };
 
-  const handleImagePress = (postId: number) => {
+  const handleImagePress = (postId: string | number) => {
     const now = Date.now();
     if (now - lastTapRef.current < 300) {
       if (singleTapTimeoutRef.current) {
@@ -71,26 +53,37 @@ export default function PostCard({ post, onLike }: PostCardProps) {
     } else {
       lastTapRef.current = now;
       singleTapTimeoutRef.current = setTimeout(() => {
-        router.push(`/post/${postId}`);
+        router.push(`/post/${String(postId)}`);
         singleTapTimeoutRef.current = null;
       }, 300);
     }
   };
 
+  // Derive display values defensively from server-shaped post
+  const authorName = post.user ? `${post.user.firstName || ''} ${post.user.lastName || ''}`.trim() : (post['username'] || 'Unknown');
+  const avatarUri = post.user?.profileImage || (post as any).avatar || null;
+  const imageUri = post.postFiles && post.postFiles.length > 0 ? post.postFiles[0].url : (post as any).image || null;
+  const commentsCount = post.comments ?? 0;
+  const sharesCount = post.shares ?? 0;
+
   return (
     <View className="mt-4 mb-12 mx-4 border border-[#E0E0E0] rounded-2xl pt-5 bg-white">
       <View className="px-4 flex-row items-center justify-between mb-4">
         <View className="flex-row items-center gap-3">
-          <Image source={{ uri: post.avatar }} className="w-10 h-10 rounded-full" />
+          {avatarUri ? (
+            <Image source={{ uri: avatarUri }} className="w-10 h-10 rounded-full" />
+          ) : (
+            <View className="w-10 h-10 rounded-full bg-gray-200" />
+          )}
           <View>
             <View className="flex-row items-center gap-1">
-              <Text className="font-semibold">{post.username}</Text>
+              <Text className="font-semibold">{authorName || 'Unknown'}</Text>
               {post.verified && (
                 <View className="bg-blue-500 rounded-full w-5 h-5 items-center justify-center mx-1">
                   <Text className="text-white text-xs">✓</Text>
                 </View>
               )}
-              {post.timeAgo ? <Text className="text-gray-500 text-sm">{post.timeAgo}</Text> : null}
+              {post.createdAt ? <Text className="text-gray-500 text-sm">{new Date(post.createdAt).toLocaleString()}</Text> : null}
             </View>
           </View>
         </View>
@@ -98,7 +91,13 @@ export default function PostCard({ post, onLike }: PostCardProps) {
 
       <View className="relative">
         <Pressable onPress={() => handleImagePress(post.id)}>
-          <Image source={{ uri: post.image }} className="w-full h-[400px] rounded-b-2xl" />
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} className="w-full h-[400px] rounded-b-2xl" />
+          ) : (
+            <View className="w-full h-[400px] rounded-b-2xl bg-gray-100 items-center justify-center">
+              <Text className="text-gray-400">No media</Text>
+            </View>
+          )}
         </Pressable>
         <Animated.View
           pointerEvents="none"
@@ -115,7 +114,7 @@ export default function PostCard({ post, onLike }: PostCardProps) {
         >
           <Animated.Image source={icons.likeActive} style={{ width: 120, height: 120, transform: [{ scale }] }} />
         </Animated.View>
-        {post.isVideo && (
+            {post.isVideo && (
           <View className="absolute inset-0 items-center justify-center">
             <View className="bg-black/50 rounded-full p-4">
               <Play size={32} color="#fff" fill="#fff" />
@@ -140,13 +139,13 @@ export default function PostCard({ post, onLike }: PostCardProps) {
           </View>
           <View className="flex-row items-center gap-1">
             <MessageCircleIcon size={18} color="#000" />
-            <Text className="text-sm font-medium">{formatCount(post.comments)}</Text>
+            <Text className="text-sm font-medium">{formatCount(commentsCount)}</Text>
           </View>
           <View className="flex-row items-center gap-1">
             <View className="transform rotate-45">
               <MessageCircleIcon size={18} color="#000" />
             </View>
-            <Text className="text-sm font-medium">{formatCount(post.shares)}</Text>
+            <Text className="text-sm font-medium">{formatCount(sharesCount)}</Text>
           </View>
         </View>
       </View>

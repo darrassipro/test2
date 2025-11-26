@@ -11,7 +11,15 @@ const getUserRole = async (communityId, userId) => {
         where: { communityId, userId },
         attributes: ['role']
     });
-    return adminEntry ? adminEntry.role : null;
+    if (adminEntry) return adminEntry.role;
+
+    // If the user is the creator of the community, consider them the owner
+    const community = await Community.findByPk(communityId, { attributes: ['creatorUserId'] });
+    if (community && community.creatorUserId === userId) {
+        return 'owner';
+    }
+
+    return null;
 };
 
 /**

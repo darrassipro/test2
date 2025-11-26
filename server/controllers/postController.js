@@ -471,6 +471,17 @@ exports.getPostById = async (req, res) => {
                     include: [
                         { model: User, as: 'user', attributes: ['id', 'firstName', 'lastName', 'profileImage', 'isVerified'] },
                         { model: CommentLike, as: 'likes', attributes: ['id', 'userId'] },
+                        // Include direct replies to this comment
+                        {
+                            model: Comment,
+                            as: 'replies',
+                            where: { isDeleted: false },
+                            required: false,
+                            include: [
+                                { model: User, as: 'user', attributes: ['id', 'firstName', 'lastName', 'profileImage', 'isVerified'] },
+                                { model: CommentLike, as: 'likes', attributes: ['id', 'userId'] },
+                            ]
+                        }
                     ],
                     order: [
                         [sequelize.literal('(SELECT COUNT(*) FROM `comment_likes` WHERE `comment_likes`.`comment_id` = `Comment`.`id`)'), 'DESC'],
@@ -526,10 +537,21 @@ exports.getPostById = async (req, res) => {
         const rawPost = post.get({ plain: true });
 
         const commentsWithAggregates = rawPost.comments.map((comment) => {
+            const replies = (comment.replies || []).map((r) => ({
+                ...r,
+                likesCount: r.likes ? r.likes.length : 0,
+                isLiked: currentUserId ? (r.likes || []).some(like => like.userId === currentUserId) : false,
+                content: r.commentText,
+                likes: undefined,
+            }));
+
             return {
                 ...comment,
-                likesCount: comment.likes.length,
-                isLiked: currentUserId ? comment.likes.some(like => like.userId === currentUserId) : false,
+                likesCount: comment.likes ? comment.likes.length : 0,
+                isLiked: currentUserId ? (comment.likes || []).some(like => like.userId === currentUserId) : false,
+                content: comment.commentText,
+                repliesCount: comment.repliesCount || (replies.length),
+                replies: replies,
                 likes: undefined,
             };
         });

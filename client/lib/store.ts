@@ -3,6 +3,8 @@ import { setupListeners } from '@reduxjs/toolkit/query';
 import { authApi } from '../services/authApi';
 import { userApi } from '../services/userApi';
 import { storyApi } from '../services/storyApi';
+import { communityApi } from '../services/communityApi';
+import { postApi } from '../services/postApi';
 import userReducer from '../services/slices/userSlice';
 
 export const store = configureStore({
@@ -11,13 +13,15 @@ export const store = configureStore({
     [authApi.reducerPath]: authApi.reducer,
     [userApi.reducerPath]: userApi.reducer,
     [storyApi.reducerPath]: storyApi.reducer,
+    [communityApi.reducerPath]: communityApi.reducer,
+    [postApi.reducerPath]: postApi.reducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
         ignoredActions: ['persist/PERSIST', 'persist/REHYDRATE'],
       },
-    }).concat(authApi.middleware, userApi.middleware, storyApi.middleware) as any,
+    }).concat(authApi.middleware, userApi.middleware, storyApi.middleware, communityApi.middleware, postApi.middleware) as any,
 });
 
 // Enable refetchOnFocus and refetchOnReconnect behaviors

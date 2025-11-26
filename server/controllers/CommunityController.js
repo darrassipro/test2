@@ -1,4 +1,5 @@
 const { Community, CommunityFile, CommunityMembership , User, Post, PostCategory, RCommCategory, CommCategory , Admin} = require('../models/index');
+const { getUserRole } = require('../middleware/checkAdminRole');
 const { deleteFile } = require('../config/cloudinary'); 
 const { Op } = require('sequelize');
 
@@ -135,6 +136,59 @@ exports.createCommunity = async (req, res) => {
 };
 
 /**
+ * @description Récupère la liste des membres d'une communauté
+ * @route GET /api/communities/:id/members
+ * @access Private (Utilisateur Authentifié)
+ */
+exports.getCommunityMembers = async (req, res) => {
+    const communityId = req.params.id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = (page - 1) * limit;
+
+    try {
+        const { CommunityMembership, User } = require('../models/index');
+
+        const { count, rows: memberships } = await CommunityMembership.findAndCountAll({
+            where: { communityId },
+            limit,
+            offset,
+            order: [['createdAt', 'DESC']],
+            include: [
+                {
+                    model: User,
+                    as: 'user',
+                    attributes: ['id', 'firstName', 'lastName', 'profileImage']
+                }
+            ]
+        });
+
+        const members = memberships.map(m => {
+            const u = m.user || {};
+            return {
+                id: u.id || null,
+                firstName: u.firstName || null,
+                lastName: u.lastName || null,
+                profileImage: u.profileImage || null,
+                joinedAt: m.createdAt
+            };
+        });
+
+        const pagination = {
+            totalItems: count,
+            totalPages: Math.ceil(count / limit),
+            currentPage: page,
+            pageSize: limit
+        };
+
+        return res.status(200).json({ success: true, members, pagination });
+
+    } catch (error) {
+        console.error('Erreur lors de la récupération des membres de la communauté:', error);
+        return res.status(500).json({ success: false, message: 'Échec de la récupération des membres.', error: error.message });
+    }
+};
+/**
  * @description Récupérer toutes les communautés actives avec pagination
  * @route GET /api/communities
  * @access Public (ou Private si nécessaire)
@@ -201,11 +255,17 @@ exports.getAllCommunities = async (req, res) => {
  * @access Private (Utilisateur Authentifié)
  */
 exports.getCommunity = async (req, res) => {
-
     const community = req.community; 
     const isUserMemberShip = req.isUserMemberShip;
-    const communityId = community.id;
-    const userId = req.user.userId;
+    const communityId = community?.id;
+    const userId = req.user?.userId;
+
+    console.log('GET /api/communities/:id called', {
+        paramsId: req.params.id,
+        resolvedCommunityId: communityId,
+        user: req.user ? { id: req.user.userId } : null,
+        isUserMemberShip
+    });
 
     try {
         const totalPostsCount = await Post.count({
@@ -255,24 +315,57 @@ exports.getCommunity = async (req, res) => {
             return res.status(200).json({
                 success: true,
                 communityInformations: communityData,
-                isUserMemberShip: false
+                isUserMemberShip: false,
+                userRole: null
             });
 
         } else {
-            const page = parseInt(req.query.page) || 1;
-            const limit = parseInt(req.query.limit) || 10;
-            const offset = (page - 1) * limit;
+                const page = parseInt(req.query.page) || 1;
+                const limit = parseInt(req.query.limit) || 10;
+                const offset = (page - 1) * limit;
 
-            const { count, rows: communityPosts } = await Post.findAndCountAll({
-                where: { communityId: communityId },
-                limit: limit,
-                offset: offset,
-                order: [['createdAt', 'DESC']],
-                include: [ 
-                              { model: User, as: 'user', attributes: ['id', 'firstName','lastName', 'profileImage'] },
-                              { model: PostCategory, as: 'category', attributes: ['id', 'name'] },
-                        ]
-            });
+                // Determine user role in this community to decide which posts to include
+                let userRole = null;
+                try {
+                    userRole = await getUserRole(communityId, userId);
+                } catch (e) {
+                    console.warn('Could not determine user role for community posts filtering', e);
+                }
+
+                // If user is owner/admin/moderator, include all statuses; otherwise only approved
+                const postWhere = { communityId: communityId };
+                if (!userRole || !['owner', 'admin', 'moderator'].includes(userRole)) {
+                    postWhere.status = 'approved';
+                }
+
+                const { PostLike } = require('../models/index');
+                const { count, rows: communityPosts } = await Post.findAndCountAll({
+                    where: postWhere,
+                    limit: limit,
+                    offset: offset,
+                    order: [['createdAt', 'DESC']],
+                    include: [ 
+                        { model: User, as: 'user', attributes: ['id', 'firstName','lastName', 'profileImage'] },
+                        { model: PostCategory, as: 'category', attributes: ['id', 'name'] },
+                        { model: require('../models/index').PostFile, as: 'postFiles', attributes: ['url', 'type'] },
+                        { model: PostLike, as: 'likedBy', attributes: ['userId'] },
+                    ]
+                });
+
+                // Get current userId from request
+                const currentUserId = req.user ? req.user.userId : null;
+
+                // Map posts to add like count and isLiked
+                const postsWithLikes = communityPosts.map(post => {
+                    const plain = post.get({ plain: true });
+                    const likes = plain.likedBy ? plain.likedBy.length : 0;
+                    const isLiked = currentUserId ? plain.likedBy.some(like => like.userId === currentUserId) : false;
+                    return {
+                        ...plain,
+                        likes,
+                        isLiked
+                    };
+                });
 
             const paginationInfos = {
                 totalItems: count,
@@ -282,12 +375,14 @@ exports.getCommunity = async (req, res) => {
             };
             
             //delete infoWithoutFiles.communityFiles; 
+            console.log('Returning community with posts', { communityId, postsCount: communityPosts.length });
             return res.status(200).json({
                 success: true,
                 communityInformations: communityData,
-                communityPosts: communityPosts,
+                communityPosts: postsWithLikes,
                 paginationInfos: paginationInfos,
-                isUserMemberShip: true
+                isUserMemberShip: true,
+                userRole: userRole || null
             });
         }
 
@@ -470,6 +565,191 @@ exports.deleteCommunity = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: "Échec de la suppression de la communauté.",
+            error: error.message
+        });
+    }
+};
+
+/**
+ * @description Récupère les communautés auxquelles l'utilisateur n'est pas encore membre.
+ * @route GET /api/communities/not-joined
+ * @access Private (Utilisateur Authentifié)
+ */
+exports.getCommunitiesNotJoined = async (req, res) => {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+    const userId = req.user.userId; 
+
+    try {
+        const userJoinedCommunityIds = await CommunityMembership.findAll({
+            where: { userId: userId },
+            attributes: ['communityId'],
+            raw: true, 
+        }).then(memberships => memberships.map(m => m.communityId));
+
+        const whereCondition = {
+            isDeleted: false,
+            id: { [Op.notIn]: userJoinedCommunityIds }
+        };
+
+        const { count, rows: communities } = await Community.findAndCountAll({
+            where: whereCondition,
+            limit: limit,
+            offset: offset,
+            order: [['totalMembers', 'DESC']], 
+            include: [
+                {
+                    model: User,
+                    as: 'creator',
+                    attributes: ['id', 'firstName', 'lastName', 'profileImage']
+                },
+                { 
+                    model: CommunityFile,
+                    as: 'communityFiles',
+                    attributes: ['url', 'isPrincipale'],
+                    where: { isPrincipale: true }, 
+                    required: false 
+                }
+            ],
+            attributes: [
+                'id', 'name', 'description', 'isVerified', 'totalMembers', 
+                'totalPosts', 'totalProducts', 'isPremium', 'price'
+            ]
+        });
+
+        const paginationInfos = {
+            totalItems: count,
+            totalPages: Math.ceil(count / limit),
+            currentPage: page,
+            pageSize: limit
+        };
+
+        return res.status(200).json({
+            success: true,
+            communities: communities,
+            paginationInfos: paginationInfos
+        });
+
+    } catch (error) {
+        console.error("Erreur lors de la récupération des communautés non-jointes:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Échec de la récupération des communautés non-jointes.",
+            error: error.message
+        });
+    }
+};
+
+/**
+ * @description Joindre une communauté
+ * @route POST /api/communities/:id/join
+ * @access Private
+ */
+exports.joinCommunity = async (req, res) => {
+    // Support UUID or numeric IDs — keep the raw param and use it directly
+    const communityId = req.params.id;
+    const userId = req.user.userId;
+
+    try {
+        console.log(`Join request: userId=${userId}, communityId=${communityId}`);
+        // Check community exists
+        const community = await Community.findOne({ where: { id: communityId, isDeleted: false } });
+        console.log('DB lookup for community returned:', !!community, community && { id: community.id, name: community.name });
+        if (!community) {
+            return res.status(404).json({ success: false, message: 'Communauté introuvable.' });
+        }
+
+        // Check if already member
+        const existing = await CommunityMembership.findOne({ where: { communityId: communityId, userId: userId } });
+        if (existing) {
+            return res.status(200).json({ success: true, message: 'Vous êtes déjà membre de cette communauté.' });
+        }
+
+        // Create membership
+        await CommunityMembership.create({ communityId: communityId, userId: userId, isCreator: false });
+        await community.increment('totalMembers', { by: 1 });
+
+        return res.status(201).json({ success: true, message: 'Adhésion réussie.' });
+    } catch (error) {
+        console.error('Erreur lors de l\'adhésion à la communauté:', error);
+        return res.status(500).json({ success: false, message: 'Échec de l\'adhésion.', error: error.message });
+    }
+};
+
+/**
+ * @description Récupère les communautés dont l'utilisateur authentifié est membre.
+ * @route GET /api/communities/user-joined
+ * @access Private (Utilisateur Authentifié)
+ */
+exports.getUserCommunities = async (req, res) => {
+    const userId = req.user.userId; 
+    
+    try {
+        // 1. Trouver toutes les adhésions de l'utilisateur
+        const memberships = await CommunityMembership.findAll({
+            where: { userId: userId },
+            attributes: ['communityId'],
+            raw: true
+        });
+
+        const communityIds = memberships.map(m => m.communityId);
+
+        if (communityIds.length === 0) {
+            return res.status(200).json({
+                success: true,
+                message: "L'utilisateur n'est membre d'aucune communauté.",
+                communities: []
+            });
+        }
+
+        // 2. Récupérer les informations minimales des communautés
+        const communities = await Community.findAll({
+            where: {
+                id: { [Op.in]: communityIds },
+                isDeleted: false 
+            },
+            order: [['totalMembers', 'DESC']], 
+            include: [
+                {
+                    model: CommunityFile,
+                    as: 'communityFiles',
+                    attributes: ['url'],
+                    where: { isPrincipale: true }, // Pour obtenir l'image de profil/couverture
+                    required: false 
+                }
+            ],
+            attributes: [
+                'id', 
+                'name', 
+                'totalMembers' 
+            ]
+        });
+
+        // 3. Formater la réponse pour correspondre au besoin de l'UI (Nom + Profil + Membres)
+        const formattedCommunities = communities.map(community => {
+            const file = community.communityFiles && community.communityFiles.length > 0
+                ? community.communityFiles[0]
+                : { url: null };
+
+            return {
+                id: community.id,
+                name: community.name,
+                totalMembers: community.totalMembers,
+                profileImage: file.url, // Utilisation de l'URL du fichier principal
+            };
+        });
+
+        return res.status(200).json({
+            success: true,
+            communities: formattedCommunities
+        });
+
+    } catch (error) {
+        console.error("Erreur lors de la récupération des communautés membres:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Échec de la récupération des communautés dont l'utilisateur est membre.",
             error: error.message
         });
     }
