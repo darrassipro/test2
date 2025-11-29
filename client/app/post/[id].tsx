@@ -1,18 +1,29 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { View, Text, Image, TextInput, FlatList, Dimensions, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ArrowLeft, ArrowLeftIcon, BookmarkIcon, Calendar, Ellipsis, MapPin, MessageCircle, Share2, UserRoundPlus } from "lucide-react-native";
 import icons from "@/constants/icons";
 import { useGetPostByIdQuery, useTogglePostLikeMutation, useToggleSavePostMutation, useCreateCommentMutation, useRecordShareMutation, useToggleCommentLikeMutation } from '../../services/postApi';
-
+import emitter from "@/lib/eventEmitter";
+ 
 const Details = () => {
   const { id } = useLocalSearchParams();
   const screenWidth = Dimensions.get("window").width;
   const [activeIndex, setActiveIndex] = useState(0);
   const { data, isLoading, error } = useGetPostByIdQuery(id);
   const post = data?.post;
-  const comments = post?.comments || [];
+
+  // Add local post state to allow reacting to external like changes
+  const [localPost, setLocalPost] = useState<any>(post);
+  // Keep localPost in sync whenever the query returns new data
+  useEffect(() => {
+    setLocalPost(post);
+  }, [post]);
+
+  // displayedPost is used throughout the UI instead of raw `post`
+  const displayedPost = localPost || post;
+  const comments = displayedPost?.comments || [];
   const [commentText, setCommentText] = useState("");
   const [replyTo, setReplyTo] = useState(null as null | string);
   const inputRef = useRef<any>(null);
@@ -121,7 +132,7 @@ const Details = () => {
       {/* Slider */}
       <View className="relative">
         <FlatList
-          data={post.postFiles || post.postFiles?.map((f: any) => f.url) || []}
+          data={displayedPost?.postFiles || displayedPost?.postFiles?.map((f: any) => f.url) || []}
           keyExtractor={(m: any, idx: number) => (m?.id || m?.url || String(idx))}
           renderItem={renderMedia}
           horizontal
@@ -132,7 +143,6 @@ const Details = () => {
             setActiveIndex(index);
           }}
         />
-        {/* Overlays top-left / top-right */}
         {post.location ? (
           <View className="absolute top-3 left-3 bg-white rounded-full px-3 py-1.5 flex-row items-center gap-1">
             <MapPin size={14} color="#111" />
@@ -158,7 +168,6 @@ const Details = () => {
         </View>
       </View>
 
-      {/* Bar flottante likes / comments / share + bookmark */}
       <View className="px-4 mt-3">
         <View className="flex-row items-center justify-between">
           <View className="bg-white rounded-full py-3 px-4 flex-row items-center justify-between shadow-lg">
@@ -169,12 +178,20 @@ const Details = () => {
                   if (isLiking) return;
                   try {
                     await togglePostLike(id).unwrap();
+                    // update local state and broadcast change so other screens (PostsSection) react
+                    const isNowLiked = !displayedPost?.isLiked;
+                    const newLikes = isNowLiked
+                      ? (displayedPost?.likesCount || 0) + 1
+                      : Math.max(0, (displayedPost?.likesCount || 0) - 1);
+                    const updated = { ...(displayedPost || {}), isLiked: isNowLiked, likesCount: newLikes, likes: newLikes };
+                    setLocalPost(updated);
+                    emitter.emit('postLikeChanged', { postId: id, isLiked: isNowLiked, likes: newLikes });
                   } catch (e) {}
                 }}
                 disabled={isLiking}
               >
-                <Image source={post.isLiked ? icons.likeActive : icons.likeInactive} className="w-5 h-5" />
-                <Text className={`text-sm font-medium ${post.isLiked ? "text-pink-500" : "text-gray-900"}`}>{formatCount(post.likesCount || 0)}</Text>
+                <Image source={displayedPost?.isLiked ? icons.likeActive : icons.likeInactive} className="w-5 h-5" />
+                <Text className={`text-sm font-medium ${displayedPost?.isLiked ? "text-pink-500" : "text-gray-900"}`}>{formatCount(displayedPost?.likesCount || 0)}</Text>
               </TouchableOpacity>
               <View className="flex-row items-center gap-1">
                 <MessageCircle size={18} color="#000" />
@@ -205,12 +222,10 @@ const Details = () => {
             }}
             disabled={isSaving}
           >
-            <BookmarkIcon size={18} color={post.isSaved ? "#E72858" : "#0F0F0F"} />
+            <BookmarkIcon size={18} color={displayedPost?.isSaved ? "#E72858" : "#0F0F0F"} />
           </TouchableOpacity>
         </View>
       </View>
-
-      {/* Section commentaires avec scroll */}
       <View className="flex-1">
         <ScrollView className="flex-1 px-4 mt-6" contentContainerStyle={{ paddingBottom: 16 }}>
           <Text className="text-[18px] font-semibold mb-4 text-center">Comments</Text>
@@ -235,7 +250,6 @@ const Details = () => {
                           try {
                             await toggleCommentLike({ postId: id, commentId: c.id }).unwrap();
                           } catch (e) {
-                            // ignore for now
                           }
                         }}
                         className="flex-row items-center"

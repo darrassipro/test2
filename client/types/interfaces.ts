@@ -1,9 +1,9 @@
-// Centralized interfaces for app types
-
 export interface PostFile {
   id?: string;
   url?: string;
   type?: string;
+  isPrincipale?: boolean;
+  createdAt?: string;
 }
 
 export interface PostUser {
@@ -11,23 +11,62 @@ export interface PostUser {
   firstName?: string;
   lastName?: string;
   profileImage?: string;
+  isVerified?: boolean;
+}
+
+export interface Community {
+  id: number;
+  name: string;
+  description?: string;
+  totalMembers?: number;
+  creator?: PostUser;
+  communityFiles?: PostFile[];
 }
 
 export interface Post {
-  id: string | number; // server uses UUID, older code may use numeric ids
+  id: string | number;
   title?: string | null;
   description?: string | null;
-  user?: PostUser; // association named `user` from server
-  postFiles?: PostFile[]; // optional media files
+  contentType?: 'post' | 'reel' | '360';
+  location?: string | null;
+  user?: PostUser;
+  postFiles?: PostFile[];
   isVideo?: boolean;
-  likes?: number; // optional counts returned by server or computed client-side
+  
+  // Engagement metrics
+  likes?: number;
+  likesCount?: number;
   comments?: number;
+  totalCommentsCount?: number;
   shares?: number;
+  sharesCount?: number;
+  
+  // User interactions
   isLiked?: boolean;
+  isSaved?: boolean;
+  isMember?: boolean;
+  
+  // Community relation
+  community?: Community;
+  communityId?: number;
+  isVisibleOutsideCommunity?: boolean;
+  
+  // Hotel booking
+  hotelNuiteeId?: string | null;
+  
+  // Sponsor
+  sponsorId?: string | null;
+  
+  // Status
+  status?: 'pending' | 'approved' | 'rejected';
+  rejectionReason?: string | null;
+  
+  // Metadata
   verified?: boolean;
   createdAt?: string;
-  status?: string;
-  // Backwards-compatible legacy fields used by some components
+  updatedAt?: string;
+  
+  // Backwards-compatible legacy fields
   username?: string;
   avatar?: string;
   image?: string;
@@ -55,7 +94,6 @@ export interface CardRotateProps {
   sensitivity: number;
 }
 
-
 export interface StackProps {
   randomRotation?: boolean;
   sensitivity?: number;
@@ -65,11 +103,20 @@ export interface StackProps {
   animationConfig?: { stiffness: number; damping: number };
 }
 
-
 export interface AccountOption {
   icon: string;
   label: string;
   onPress: () => void;
 }
 
-
+export interface Comment {
+  id: string | number;
+  content: string;
+  user?: PostUser;
+  likesCount?: number;
+  isLiked?: boolean;
+  repliesCount?: number;
+  replies?: Comment[];
+  children?: Comment[];
+  createdAt?: string;
+}

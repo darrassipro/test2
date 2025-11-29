@@ -1,10 +1,13 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, FlatList, ActivityIndicator, Modal, TextInput } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, FlatList, ActivityIndicator, Modal, TextInput, Image } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Search, CheckCircle } from 'lucide-react-native';
 import { useGetAllCommunitiesQuery, useGetCommunitiesNotJoinedQuery } from '@/services/communityApi';
 
 export default function CommunitiesModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState('');
+
   const { data: allResp, isLoading: loadingAll } = useGetAllCommunitiesQuery({ page: 1, limit: 50 }, { skip: !visible });
   const { data: notJoinedResp, isLoading: loadingNotJoined } = useGetCommunitiesNotJoinedQuery({ page: 1, limit: 50 }, { skip: !visible });
 
@@ -14,6 +17,11 @@ export default function CommunitiesModal({ visible, onClose }: { visible: boolea
   const myCommunities = all.filter((c: any) => !notJoinedIds.has(c.id));
 
   const isLoading = loadingAll || loadingNotJoined;
+
+  // Filter communities based on search query
+  const filteredCommunities = myCommunities.filter((c: any) => 
+    c.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   const handleCreate = () => {
     onClose();
@@ -25,55 +33,232 @@ export default function CommunitiesModal({ visible, onClose }: { visible: boolea
     router.push('/communities' as any);
   };
 
+  const handleSelectCommunity = (community: any) => {
+    onClose();
+    router.push(`/create-post?communityId=${community.id}` as any);
+  };
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center' }}>
-        <View style={{ width: 345, height: 375, backgroundColor: '#fff', borderRadius: 19, padding: 16 }}>
-          <View style={{ alignItems: 'center', marginBottom: 12 }}>
-            <Text style={{ fontSize: 18, fontWeight: '700' }}>Choisissez une communauté</Text>
+      <TouchableOpacity 
+        style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 66 }}
+        activeOpacity={1}
+        onPress={onClose}
+      >
+        <TouchableOpacity 
+          activeOpacity={1}
+          onPress={(e) => e.stopPropagation()}
+          style={{ 
+            width: 345, 
+            backgroundColor: '#FFFFFF', 
+            borderRadius: 19,
+            paddingTop: 12,
+            paddingBottom: 18,
+            marginBottom: 8,
+            position: 'relative'
+          }}
+        >
+          {/* Title */}
+          <View style={{ alignItems: 'center', paddingVertical: 12 }}>
+            <Text style={{ 
+              fontFamily: 'Inter_500Medium',
+              fontSize: 14,
+              lineHeight: 27,
+              textAlign: 'center',
+              color: '#000000',
+            }}>
+              Choose a community to post
+            </Text>
           </View>
 
-          <View style={{ marginBottom: 12 }}>
-            <View style={{ backgroundColor: '#F5F5F5', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 10 }}>
-              <TextInput placeholder="Search communities..." style={{ height: 24 }} />
+          {/* Search Bar */}
+          <View style={{ paddingHorizontal: 13.5, marginBottom: 18 }}>
+            <View style={{ 
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#F5F5F5',
+              borderRadius: 864,
+              paddingHorizontal: 13,
+              paddingVertical: 11,
+              gap: 6.5,
+            }}>
+              <Search size={20} color="#1A2038" strokeWidth={1.32} />
+              <TextInput
+                placeholder="Search posts, creators, or destinations…"
+                placeholderTextColor="#1A2038"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                style={{
+                  flex: 1,
+                  fontFamily: 'Inter_500Medium',
+                  fontSize: 11.5,
+                  color: '#1A2038',
+                  padding: 0,
+                }}
+              />
             </View>
           </View>
 
-          {isLoading ? (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-              <ActivityIndicator size="large" color="#E72858" />
-            </View>
-          ) : myCommunities && myCommunities.length > 0 ? (
-            <FlatList
-              data={myCommunities}
-              keyExtractor={(item) => String(item.id)}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  onPress={() => { onClose(); router.push(`/create-post?communityId=${item.id}` as any); }}
-                  style={{ padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#eee', marginBottom: 8 }}
-                >
-                  <Text style={{ fontSize: 16, fontWeight: '600' }}>{item.name}</Text>
-                  <Text style={{ fontSize: 12, color: '#666', marginTop: 6 }} numberOfLines={2}>{item.description}</Text>
-                </TouchableOpacity>
-              )}
-            />
-          ) : (
-            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-              <Text style={{ fontSize: 16, color: '#333', marginBottom: 18, textAlign: 'center' }}>Vous n'êtes membre d'aucune communauté pour le moment.</Text>
-              <TouchableOpacity onPress={handleCreate} style={{ width: '100%', padding: 14, backgroundColor: '#E72858', borderRadius: 10, alignItems: 'center', marginBottom: 12 }}>
-                <Text style={{ color: '#fff', fontWeight: '700' }}>Créer une communauté</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={handleViewAll} style={{ width: '100%', padding: 14, backgroundColor: '#fff', borderRadius: 10, alignItems: 'center', borderWidth: 1, borderColor: '#E72858' }}>
-                <Text style={{ color: '#E72858', fontWeight: '700' }}>Voir les communautés</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+          {/* Communities List */}
+          <View style={{ maxHeight: 240, paddingHorizontal: 13.5 }}>
+            {isLoading ? (
+              <View style={{ padding: 20, alignItems: 'center' }}>
+                <ActivityIndicator size="large" color="#E72858" />
+              </View>
+            ) : filteredCommunities.length > 0 ? (
+              <FlatList
+                data={filteredCommunities}
+                keyExtractor={(item) => String(item.id)}
+                showsVerticalScrollIndicator={false}
+                ItemSeparatorComponent={() => (
+                  <View style={{ 
+                    height: 0.5, 
+                    backgroundColor: '#E0E0E0', 
+                    marginHorizontal: 0,
+                    borderRadius: 3 
+                  }} />
+                )}
+                renderItem={({ item }) => {
+                  const avatarUri = item.creator?.profileImage || item.communityFiles?.[0]?.url || 'https://via.placeholder.com/41';
+                  const memberCount = item.totalMembers || 0;
 
-          <TouchableOpacity onPress={onClose} style={{ position: 'absolute', top: 12, right: 12 }}>
-            <Text style={{ fontSize: 18 }}>×</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+                  return (
+                    <TouchableOpacity
+                      onPress={() => handleSelectCommunity(item)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingVertical: 12,
+                        position: 'relative',
+                      }}
+                    >
+                      {/* Avatar and Text */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5.8, flex: 1 }}>
+                        {/* Avatar */}
+                        <Image
+                          source={{ uri: avatarUri }}
+                          style={{
+                            width: 40.7,
+                            height: 40.7,
+                            borderRadius: 20.35,
+                            backgroundColor: '#000000',
+                          }}
+                        />
+                        
+                        {/* Name and Members */}
+                        <View style={{ 
+                          flexDirection: 'column',
+                          justifyContent: 'center',
+                          gap: 2.9,
+                        }}>
+                          <Text 
+                            style={{
+                              fontFamily: 'Inter_500Medium',
+                              fontWeight: '600',
+                              fontSize: 13.08,
+                              lineHeight: 16,
+                              color: '#000000',
+                            }}
+                            numberOfLines={1}
+                          >
+                            {item.name}
+                          </Text>
+                          <Text style={{
+                            fontFamily: 'Inter_500Medium',
+                            fontSize: 11.63,
+                            lineHeight: 14,
+                            color: '#5B5B5B',
+                          }}>
+                            {memberCount}K Members
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Check Circle Icon */}
+                      <View style={{ 
+                        position: 'absolute',
+                        right: 0,
+                        top: '50%',
+                        transform: [{ translateY: -12 }],
+                      }}>
+                        <CheckCircle size={24} color="#E72858" fill="#E72858" />
+                      </View>
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            ) : (
+              <View style={{ padding: 20, alignItems: 'center', gap: 18 }}>
+                <Text style={{ 
+                  fontSize: 14, 
+                  color: '#333', 
+                  textAlign: 'center',
+                  fontFamily: 'Inter_500Medium',
+                }}>
+                  {searchQuery ? 'No communities found' : 'You are not a member of any community yet.'}
+                </Text>
+                {!searchQuery && (
+                  <>
+                    <TouchableOpacity
+                      onPress={handleCreate}
+                      style={{
+                        width: '100%',
+                        padding: 14,
+                        backgroundColor: '#E72858',
+                        borderRadius: 10,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text style={{ 
+                        color: '#fff', 
+                        fontWeight: '700',
+                        fontFamily: 'Inter_500Medium',
+                      }}>
+                        Create a community
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={handleViewAll}
+                      style={{
+                        width: '100%',
+                        padding: 14,
+                        backgroundColor: '#fff',
+                        borderRadius: 10,
+                        alignItems: 'center',
+                        borderWidth: 1,
+                        borderColor: '#E72858',
+                      }}
+                    >
+                      <Text style={{ 
+                        color: '#E72858', 
+                        fontWeight: '700',
+                        fontFamily: 'Inter_500Medium',
+                      }}>
+                        View communities
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </View>
+            )}
+          </View>
+        </TouchableOpacity>
+        {/* triangular notch connecting modal to tabs (centered) */}
+        <View style={{
+          position: 'absolute',
+          bottom: 60,
+          left: '50%',
+          marginLeft: -14,
+          width: 0,
+          height: 0,
+          borderLeftWidth: 14,
+          borderRightWidth: 14,
+          borderTopWidth: 14,
+          borderLeftColor: 'transparent',
+          borderRightColor: 'transparent',
+          borderTopColor: '#FFFFFF',
+        }} />
+      </TouchableOpacity>
     </Modal>
   );
 }

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Modal, View, Text, TouchableOpacity, Image, FlatList, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { X } from 'lucide-react-native';
@@ -13,6 +13,7 @@ type Props = {
 
 const MemberRow = ({ member }: { member: any }) => {
   const name = `${member.firstName || ''} ${member.lastName || ''}`.trim() || 'Unknown';
+  
   return (
     <View className="flex-row items-center px-4 py-3 border-b border-gray-100 bg-white">
       <Image
@@ -21,25 +22,55 @@ const MemberRow = ({ member }: { member: any }) => {
       />
       <View style={{ flex: 1 }}>
         <Text className="text-sm font-medium text-black">{name}</Text>
-        <Text className="text-xs text-gray-500">{new Date(member.joinedAt).toLocaleDateString()}</Text>
+        <Text className="text-xs text-gray-500">
+          {new Date(member.joinedAt).toLocaleDateString()}
+        </Text>
       </View>
     </View>
   );
 };
 
 export default function MembersModal({ visible, onClose, communityId }: Props) {
+  // Memoize the query parameters to prevent them from changing on every render
+  const queryParams = useMemo(() => ({
+    id: communityId as any,
+    page: 1,
+    limit: 200
+  }), [communityId]);
+
+  // Only fetch when modal is visible and communityId is available
+  const shouldSkip = !visible || !communityId;
+
   const { data, isLoading, isFetching, error } = useGetCommunityMembersQuery(
-    { id: communityId as any, page: 1, limit: 200 },
-    { skip: !visible || !communityId }
+    queryParams,
+    { 
+      skip: shouldSkip,
+      // Prevent refetching on every render
+      refetchOnMountOrArgChange: false,
+      refetchOnFocus: false,
+      refetchOnReconnect: false
+    }
   );
 
-  const members = data?.members || [];
+  const members = useMemo(() => data?.members || [], [data?.members]);
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
       <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.35)' }}>
         <SafeAreaView style={{ flex: 1, justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 12, borderTopRightRadius: 12, maxHeight: '80%' }}>
+          <View
+            style={{
+              backgroundColor: '#fff',
+              borderTopLeftRadius: 12,
+              borderTopRightRadius: 12,
+              maxHeight: '80%'
+            }}
+          >
             <View className="flex-row items-center justify-between px-4 py-3 border-b border-gray-100">
               <Text className="text-lg font-semibold">Membres</Text>
               <TouchableOpacity onPress={onClose}>
@@ -53,7 +84,9 @@ export default function MembersModal({ visible, onClose, communityId }: Props) {
               </View>
             ) : error ? (
               <View style={{ padding: 20 }}>
-                <Text className="text-sm text-red-500">Impossible de charger les membres.</Text>
+                <Text className="text-sm text-red-500">
+                  Impossible de charger les membres.
+                </Text>
               </View>
             ) : (
               <FlatList

@@ -1,53 +1,45 @@
-// app/(tabs)/index.tsx ou app/feed.tsx
-import { SafeAreaView } from "react-native-safe-area-context";
-import { ScrollView, RefreshControl } from "react-native";
-import { useState } from "react";
-import StoriesSection from "@/components/feed/StoriesSection";
-import CreatePostSection from "@/components/feed/CreatePostSection";
-import SuggestedSection from "@/components/feed/SuggestedSection";
-import PostsSection from "@/components/feed/PostsSection";
-import Toast from 'react-native-toast-message';
+import { View, Text, ScrollView, Image, TextInput, StatusBar } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import {  Search } from 'lucide-react-native';
+import images from '@/constants/images';  
+import StoriesSection from '@/components/feed/StoriesSection';
+import CreatePostSection from '@/components/feed/CreatePostSection';
+import PostsSection from '@/components/feed/PostsSection';
+import SuggestedSection from '@/components/feed/SuggestedSection';
+import FeedHeader from '@/components/feed/FeedHeader';
 
-export default function FeedPage() {
-  const [refreshing, setRefreshing] = useState(false);
+// Sections sont auto‑contenues: pas de props, données locales dans chaque composant
 
-  const onRefresh = async () => {
-    setRefreshing(true);
-    // Le refresh sera géré automatiquement par RTK Query
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
-  };
-
+export default function FeedScreen() {
   return (
-    <SafeAreaView className="flex-1 bg-white" edges={['top']}>
-      <ScrollView 
-        showsVerticalScrollIndicator={false}
-        className="flex-1"
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#E72858']}
-            tintColor="#E72858"
-          />
-        }
-      >
-        {/* Section Stories */}
-        <StoriesSection />
+    <SafeAreaView className="flex-1 h-full bg-white" edges={['left','right']}>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+      <Image
+        source={images.bg}
+        className="absolute w-full h-auto z-0"
+        resizeMode="cover"
+      />
+      <View className="flex-1 h-full mt-10">
+        <FeedHeader />
 
-        {/* Section Créer un Post */}
-        <CreatePostSection />
+        <ScrollView className="flex-1 h-full" contentContainerStyle={{ paddingBottom: 100 }}>
+          <View className="px-4 py-4">
+            <View className="flex-row items-center bg-white rounded-full px-4 py-2" style={{ boxShadow: '0px 5px 10px 0px rgba(0, 0, 0, 0.1)' }}>
+              <Search size={20} color="#666" />
+              <TextInput
+                placeholder="Search posts, creators, or destinations..."
+                placeholderTextColor="#666"
+                className="flex-1 ml-2 text-sm"
+              />
+            </View>
+          </View>
 
-        {/* Section Communautés Suggérées */}
-        <SuggestedSection />
-
-        {/* Section Posts Publics */}
-        <PostsSection />
-      </ScrollView>
-
-      {/* Toast notifications */}
-      <Toast />
+          <StoriesSection />
+          <CreatePostSection />
+          <PostsSection />
+          <SuggestedSection />
+        </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }

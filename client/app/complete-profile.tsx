@@ -57,6 +57,11 @@ export default function CompleteProfile() {
   const [profileImage, setProfileImage] = useState<string | null>(user?.profileImage || null);
   const [bannerImage, setBannerImage] = useState<string | null>(user?.banner || null);
 
+  // Add a fullName state for the input
+  const [fullName, setFullName] = useState(
+    [user?.firstName, user?.lastName].filter(Boolean).join(' ')
+  );
+
   useEffect(() => {
     if (user) {
       setFormData({
@@ -65,6 +70,7 @@ export default function CompleteProfile() {
         profileDescription: user.profileDescription || '',
         country: user.country || '',
       });
+      setFullName([user.firstName, user.lastName].filter(Boolean).join(' '));
       setSocialLinks(parseSocialLinks(user.socialMediaLinks));
       setProfileImage(user.profileImage || null);
       setBannerImage(user.banner || null);
@@ -111,8 +117,11 @@ export default function CompleteProfile() {
     try {
       const registrationData: any = {};
 
-      if (formData.firstName.trim()) registrationData.firstName = formData.firstName.trim();
-      if (formData.lastName.trim()) registrationData.lastName = formData.lastName.trim();
+      // Split fullName into firstName and lastName on submit
+      const names = fullName.trim().split(' ');
+      registrationData.firstName = names[0] || '';
+      registrationData.lastName = names.slice(1).join(' ') || '';
+
       if (formData.profileDescription.trim()) registrationData.profileDescription = formData.profileDescription.trim();
       if (formData.country.trim()) registrationData.country = formData.country.trim();
       if (profileImage) registrationData.profileImage = profileImage;
@@ -213,15 +222,8 @@ export default function CompleteProfile() {
               className="h-[49px] bg-white border border-[#EEEEEE] rounded-[14px] px-[14px] text-xs font-medium text-[#1F1F1F]"
               placeholder="Enter your full name"
               placeholderTextColor="#7E7E7E"
-              value={`${formData.firstName} ${formData.lastName}`.trim()}
-              onChangeText={(text) => {
-                const names = text.split(' ');
-                setFormData({
-                  ...formData,
-                  firstName: names[0] || '',
-                  lastName: names.slice(1).join(' ') || '',
-                });
-              }}
+              value={fullName}
+              onChangeText={setFullName}
             />
           </View>
 

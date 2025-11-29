@@ -140,15 +140,15 @@ export default function CreateCommunity() {
         setUploadProgress(0);
 
         try {
-          // Prepare payload in the same shape communityApi expects
+          // Prepare payload in the same shape communityApi expects, with explicit role for each file
           const payload = {
             name: name.trim(),
             description: about.trim(),
             country,
             socialLinks: { facebook, instagram, whatsapp },
-            bannerImage: bannerImage ? { uri: bannerImage, name: bannerImage.split('/').pop(), type: 'image/jpeg' } : null,
-            avatarImage: avatarImage ? { uri: avatarImage, name: avatarImage.split('/').pop(), type: 'image/jpeg' } : null,
-            files: files.map((uri) => ({ uri, name: uri.split('/').pop(), type: 'image/jpeg' })),
+            bannerImage: bannerImage ? { uri: bannerImage, name: bannerImage.split('/').pop(), type: 'image/jpeg', role: 'banner' } : null,
+            avatarImage: avatarImage ? { uri: avatarImage, name: avatarImage.split('/').pop(), type: 'image/jpeg', role: 'avatar' } : null,
+            files: files.map((uri) => ({ uri, name: uri.split('/').pop(), type: 'image/jpeg', role: 'gallery' })),
           };
 
           const res = await createCommunity(payload).unwrap();

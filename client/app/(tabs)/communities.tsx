@@ -5,6 +5,9 @@ import { Search, ChevronLeft, Filter } from "lucide-react-native";
 import CommunityCard from "@/components/feed/CommunityCard";
 import images from "@/constants/images";
 import { useGetAllCommunitiesQuery, useGetCommunitiesNotJoinedQuery, useJoinCommunityMutation } from '@/services/communityApi';
+import { getFileByRole } from '@/utils/helpers';
+import { useAppSelector } from '@/lib/hooks';
+import { selectUser } from '@/services/slices/userSlice';
 
 const screenWidth = Dimensions.get("window").width;
 const padding = 32; // px-4 = 16px * 2
@@ -23,8 +26,11 @@ export default function Communities() {
 
   const notJoinedIds = new Set(notJoined.map((c: any) => c.id));
   const myCommunities = all.filter((c: any) => !notJoinedIds.has(c.id));
-  const suggested = notJoined;
+  // Show only communities not joined.
+  const suggested = all.filter((c: any) => notJoinedIds.has(c.id));
+  const user = useAppSelector(selectUser);
 
+  
   const filteredMy = myCommunities.filter((community: any) => community.name.toLowerCase().includes(searchQuery.toLowerCase()));
   const filteredSuggested = suggested.filter((community: any) => community.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
@@ -87,52 +93,82 @@ export default function Communities() {
             {/* My Communities */}
             <Text className="text-lg font-semibold mb-3">My communities</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" }}>
-              {filteredMy.map((community: any) => (
-                console.log('My community render', { id: community.id, name: community.name }),
-                <View
-                  key={community.id}
-                  style={{
-                    width: (screenWidth - padding - gap) / 2,
-                    marginBottom: 16,
-                  }}
-                >
-                  <CommunityCard
-                    id={community.id}
-                    name={community.name}
-                    followers={`${community.totalMembers || 0} Members`}
-                    avatar={community.creator?.profileImage || community.communityFiles?.[0]?.url || 'https://via.placeholder.com/150'}
-                    image={community.communityFiles?.[0]?.url || 'https://via.placeholder.com/300'}
-                    variant="grid"
-                    isMember={true}
-                  />
-                </View>
-              ))}
+              {filteredMy.map((community: any) => {
+                const avatarUrl = community.creator?.profileImage || getFileByRole(community.communityFiles, 'avatar') || 'https://via.placeholder.com/150';
+                const bannerUrl = getFileByRole(community.communityFiles, 'banner') || 'https://via.placeholder.com/300';
+                const isOwner = user && community.creator && community.creator.id === user.id;
+                return (
+                  <View
+                    key={community.id}
+                    style={{
+                      width: (screenWidth - padding - gap) / 2,
+                      marginBottom: 16,
+                      position: 'relative'
+                    }}
+                  >
+                    {/* Owner label in top-right corner of the card */}
+                    {isOwner && (
+                      <View style={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        zIndex: 2,
+                        backgroundColor: '#FFE8EE',
+                        borderRadius: 8,
+                        paddingHorizontal: 8,
+                        paddingVertical: 2,
+                      }}>
+                        <Text style={{
+                          fontSize: 12,
+                          color: '#E72858',
+                          fontWeight: 'bold',
+                        }}>
+                          Owner
+                        </Text>
+                      </View>
+                    )}
+                    <CommunityCard
+                      id={community.id}
+                      name={community.name}
+                      followers={`${community.totalMembers || 0} Members`}
+                      avatar={avatarUrl}
+                      image={bannerUrl}
+                      variant="grid"
+                      isMember={true}
+                    />
+                  </View>
+                );
+              })}
             </View>
 
             {/* Suggested / Not joined */}
             <Text className="text-lg font-semibold mt-6 mb-3">Suggested for you</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" }}>
-              {filteredSuggested.map((community: any) => (
-                console.log('Suggested community render', { id: community.id, name: community.name }),
-                <View
-                  key={community.id}
-                  style={{
-                    width: (screenWidth - padding - gap) / 2,
-                    marginBottom: 16,
-                  }}
-                >
-                  <CommunityCard
-                    id={community.id}
-                    name={community.name}
-                    followers={`${community.totalMembers || 0} Members`}
-                    avatar={community.creator?.profileImage || community.communityFiles?.[0]?.url || 'https://via.placeholder.com/150'}
-                    image={community.communityFiles?.[0]?.url || 'https://via.placeholder.com/300'}
-                    variant="grid"
-                    isMember={false}
-                    onJoin={handleJoin}
-                  />
-                </View>
-              ))}
+              {filteredSuggested.map((community: any) => {
+                const avatarUrl = getFileByRole(community.communityFiles, 'avatar') || 'https://via.placeholder.com/150';
+                const bannerUrl = getFileByRole(community.communityFiles, 'banner') || 'https://via.placeholder.com/300';
+
+                return (
+                  <View
+                    key={community.id}
+                    style={{
+                      width: (screenWidth - padding - gap) / 2,
+                      marginBottom: 16,
+                    }}
+                  >
+                    <CommunityCard
+                      id={community.id}
+                      name={community.name}
+                      followers={`${community.totalMembers || 0} Members`}
+                      avatar={avatarUrl}
+                      image={bannerUrl}
+                      variant="grid"
+                      isMember={false}
+                      onJoin={handleJoin}
+                    />
+                  </View>
+                );
+              })}
             </View>
           </View>
         </ScrollView>
