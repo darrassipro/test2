@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ChevronLeft, Settings, Home, ShoppingBag, MapPin, Edit, Building2, ChefHat, Bike, ImagePlus, Video, Orbit } from "lucide-react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useApprovePostMutation, useRejectPostMutation, useTogglePostLikeMutation } from '@/services/postApi';
-import { communityApi } from '@/services/communityApi';
+import { communityApi, useJoinCommunityMutation } from '@/services/communityApi';
 import Toast from 'react-native-toast-message';
 import { useAppDispatch } from '@/lib/hooks';
 import PostCard from "@/components/feed/PostCard";
@@ -41,6 +41,7 @@ export default function CommunityDetails() {
   const [approvePost] = useApprovePostMutation();
   const [rejectPost] = useRejectPostMutation();
   const [togglePostLike] = useTogglePostLikeMutation();
+  const [joinCommunity] = useJoinCommunityMutation();
   const dispatch = useAppDispatch();
   const navigation = useNavigation();
 
@@ -51,6 +52,7 @@ export default function CommunityDetails() {
   const [rejectReason, setRejectReason] = useState('');
   const [activeTab, setActiveTab] = useState("Feed");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [isJoining, setIsJoining] = useState(false);
 
   const [localPosts, setLocalPosts] = useState<any[]>(communityPosts);
 
@@ -114,6 +116,31 @@ export default function CommunityDetails() {
   }
 
   const isModerator = isUserMemberShip && userRole && ['owner','admin','moderator'].includes(userRole);
+
+  const handleJoinCommunity = async () => {
+    if (!communityId || isJoining) return;
+    
+    setIsJoining(true);
+    try {
+      await joinCommunity(communityId).unwrap();
+      Toast.show({
+        type: 'success',
+        text1: 'Joined successfully!',
+        text2: 'You are now a member of this community.'
+      });
+      // Refetch community data to update membership status
+      refetch();
+    } catch (error: any) {
+      console.error('Join community failed:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Join failed',
+        text2: error?.data?.message || error?.message || 'Unable to join community'
+      });
+    } finally {
+      setIsJoining(false);
+    }
+  };
 
   const handleLike = async (postId: any) => {
     let changedPost: any = null;
@@ -723,7 +750,43 @@ export default function CommunityDetails() {
                   </View>
                 )}
 
-                {/* All Posts header */}
+                {/* Join Community Button for Non-Members */}
+                {!isUserMemberShip && (
+                  <View style={{
+                    marginTop: 20,
+                    paddingHorizontal: 15
+                  }}>
+                    <TouchableOpacity
+                      onPress={handleJoinCommunity}
+                      disabled={isJoining}
+                      style={{
+                        backgroundColor: '#E72858',
+                        borderRadius: 25,
+                        paddingVertical: 12,
+                        paddingHorizontal: 32,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'row',
+                        gap: 8,
+                        opacity: isJoining ? 0.7 : 1
+                      }}
+                    >
+                      {isJoining ? (
+                        <ActivityIndicator color="#FFFFFF" size="small" />
+                      ) : null}
+                      <Text style={{
+                        color: '#FFFFFF',
+                        fontSize: 16,
+                        fontWeight: '600',
+                        textAlign: 'center'
+                      }}>
+                        {isJoining ? 'Joining...' : 'Join Community'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {/* Posts header */}
                 <View style={{ 
                   paddingHorizontal: 15,
                   marginTop: 8,
@@ -735,7 +798,7 @@ export default function CommunityDetails() {
                     lineHeight: 27,
                     color: '#1F1F1F'
                   }}>
-                    All Posts
+                    {isUserMemberShip ? 'All Posts' : 'Public Posts'}
                   </Text>
                 </View>
 
