@@ -69,7 +69,9 @@ export default function Profile() {
       label: "Personal informations",
       iconComponent: User,
       color: "#000000",
-      onPress: () => {},
+      onPress: () => {
+        router.push('/personal-information');
+      },
     },
     {
       id: "password-security",
@@ -138,7 +140,9 @@ export default function Profile() {
       label: "Personal informations",
       iconComponent: User,
       color: "#1F1F1F",
-      onPress: () => {},
+      onPress: () => {
+        router.push('/personal-information');
+      },
     },
     {
       id: "orders",
