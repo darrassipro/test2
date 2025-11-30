@@ -14,6 +14,8 @@ import {
 } from "@expo-google-fonts/inter";
 import { checkAuth, selectIsAuthenticated, selectIsLoading, selectUser } from "@/services/slices/userSlice";
 import { useAppDispatch } from "@/lib/hooks";
+import '@/i18n';
+import { LanguageProvider } from '@/contexts/LanguageContext';
 
 // Composant interne pour gérer la navigation basée sur l'authentification
 function RootLayoutNav() {
@@ -141,6 +143,18 @@ function RootLayoutNav() {
             headerShown: false,
           }}
         />
+        <Stack.Screen
+          name="password-security"
+          options={{
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="language-settings"
+          options={{
+            headerShown: false,
+          }}
+        />
       </Stack>
     </>
   );
@@ -173,8 +187,10 @@ export default function RootLayout() {
 
   return (
     <Provider store={store}>
-      <RootLayoutNav />
-      <Toast config={toastConfig} />
+      <LanguageProvider>
+        <RootLayoutNav />
+        <Toast config={toastConfig} />
+      </LanguageProvider>
     </Provider>
   );
 }
