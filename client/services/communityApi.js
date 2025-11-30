@@ -99,38 +99,14 @@ export const communityApi = createApi({
       invalidatesTags: ['Community']
     }),
     updateCommunity: builder.mutation({
-      query: ({ id, ...data }) => {
-        const formData = new FormData();
-        if (data.name) formData.append('name', data.name);
-        if (data.description) formData.append('description', data.description);
-        if (data.country) formData.append('country', data.country);
-        if (data.socialLinks) formData.append('socialLinks', JSON.stringify(data.socialLinks));
-        if (data.bannerImage) {
-          const banner = typeof data.bannerImage === 'string' ? { uri: data.bannerImage, name: 'banner.jpg', type: 'image/jpeg' } : data.bannerImage;
-          formData.append('images', banner);
-          formData.append('roles', 'banner');
-        }
-        if (data.avatarImage) {
-          const avatar = typeof data.avatarImage === 'string' ? { uri: data.avatarImage, name: 'avatar.jpg', type: 'image/jpeg' } : data.avatarImage;
-          formData.append('images', avatar);
-          formData.append('roles', 'avatar');
-        }
-        if (data.files && Array.isArray(data.files)) {
-          data.files.forEach((f) => {
-            const file = typeof f === 'string' ? { uri: f, name: f.split('/').pop() || 'file.jpg', type: 'image/jpeg' } : f;
-            formData.append('images', file);
-            formData.append('roles', 'gallery');
-          });
-        }
-        return {
-          url: `/communities/${id}`,
-          method: 'PUT',
-          body: formData,
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        };
-      },
+      query: ({ id, formData }) => ({
+        url: `/communities/${id}`,
+        method: 'PUT',
+        body: formData,
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      }),
       invalidatesTags: ['Community'],
     })
   }),
