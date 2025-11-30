@@ -1,47 +1,74 @@
-import React, { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StatusBar,
-  Alert,
-  ActivityIndicator,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
-import { ChevronLeft, Check, X } from "lucide-react-native";
+import React, { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StatusBar, Alert, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ChevronLeft, Check, X } from 'lucide-react-native';
+import { router } from 'expo-router';
+import { useTranslation } from 'react-i18next';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useUpdatePasswordMutation } from "@/services/userApi";
 
-export default function PasswordSecurity() {
-  const [oldPassword, setOldPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [updatePassword, { isLoading }] = useUpdatePasswordMutation();
+interface PasswordValidation {
+  minLength: boolean;
+  hasUppercase: boolean;
+  hasLowercase: boolean;
+  hasNumber: boolean;
+  hasSpecialChar: boolean;
+}
 
-  const handleCancel = () => {
-    router.back();
+export default function PasswordSecurity() {
+  const { t } = useTranslation();
+  const { isRTL } = useLanguage();
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [updatePassword, { isLoading }] = useUpdatePasswordMutation();
+  const [validation, setValidation] = useState<PasswordValidation>({
+    minLength: false,
+    hasUppercase: false,
+    hasLowercase: false,
+    hasNumber: false,
+    hasSpecialChar: false
+  });
+
+  const validatePassword = (password: string): PasswordValidation => {
+    return {
+      minLength: password.length >= 8,
+      hasUppercase: /[A-Z]/.test(password),
+      hasLowercase: /[a-z]/.test(password),
+      hasNumber: /\d/.test(password),
+      hasSpecialChar: /[!@#$%^&*(),.?":{}|<>]/.test(password)
+    };
+  };
+
+  const handleNewPasswordChange = (password: string) => {
+    setNewPassword(password);
+    setValidation(validatePassword(password));
+  };
+
+  const isPasswordValid = () => {
+    const val = validation;
+    return val.minLength && val.hasUppercase && val.hasLowercase && val.hasNumber && val.hasSpecialChar;
   };
 
   const handleSave = async () => {
     // Validation
     if (!oldPassword.trim()) {
-      Alert.alert("Erreur", "Veuillez saisir votre ancien mot de passe");
+      Alert.alert(t('common.error'), t('password.validation.required'));
       return;
     }
 
     if (!newPassword.trim()) {
-      Alert.alert("Erreur", "Veuillez saisir votre nouveau mot de passe");
+      Alert.alert(t('common.error'), t('password.validation.required'));
       return;
     }
 
-    if (newPassword.length < 8) {
-      Alert.alert("Erreur", "Le nouveau mot de passe doit contenir au moins 8 caractères");
+    if (!isPasswordValid()) {
+      Alert.alert(t('common.error'), 'Please ensure your password meets all requirements');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert("Erreur", "Les mots de passe ne correspondent pas");
+      Alert.alert(t('common.error'), t('password.validation.passwords_match'));
       return;
     }
 
@@ -51,736 +78,298 @@ export default function PasswordSecurity() {
         newPassword: newPassword,
       }).unwrap();
 
-      Alert.alert("Succès", "Mot de passe mis à jour avec succès", [
-        {
-          text: "OK",
-          onPress: () => router.back(),
-        },
-      ]);
+      Alert.alert(
+        t('password.change_success'),
+        t('password.change_success_message'),
+        [
+          {
+            text: t('common.ok'),
+            onPress: () => router.back()
+          }
+        ]
+      );
     } catch (error: any) {
-      const errorMessage = error?.data?.error || "Erreur lors de la mise à jour du mot de passe";
-      Alert.alert("Erreur", errorMessage);
+      console.error('Error changing password:', error);
+      const errorMessage = error?.data?.error || t('password.change_error');
+      Alert.alert(t('common.error'), errorMessage);
     }
   };
 
+  const ValidationItem = ({ isValid, text }: { isValid: boolean; text: string }) => (
+    <View style={{
+      flexDirection: isRTL ? 'row-reverse' : 'row',
+      alignItems: 'center',
+      marginBottom: 4
+    }}>
+      {isValid ? (
+        <Check size={16} color="#22C55E" strokeWidth={2} />
+      ) : (
+        <X size={16} color="#EF4444" strokeWidth={2} />
+      )}
+      <Text style={{
+        fontSize: 12,
+        color: isValid ? '#22C55E' : '#EF4444',
+        marginLeft: isRTL ? 0 : 8,
+        marginRight: isRTL ? 8 : 0,
+        textAlign: isRTL ? 'right' : 'left'
+      }}>
+        {text}
+      </Text>
+    </View>
+  );
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#FDFDFD" }}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
-      
-      {/* Container */}
-      <View
-        style={{
-          position: "relative",
-          width: 380,
-          height: 842,
-          backgroundColor: "#FDFDFD",
-          borderRadius: 30,
-          alignSelf: "center",
-          flex: 1,
-        }}
-      >
-        {/* Status Bar */}
-        <View
-          style={{
-            display: "flex",
-            flexDirection: "row",
-            justifyContent: "space-between",
-            alignItems: "center",
-            paddingHorizontal: 0,
-            gap: 186,
-            position: "absolute",
-            width: 393,
-            height: 22,
-            left: -19,
-            top: 15,
-          }}
-        >
-          {/* Time */}
-          <View
-            style={{
-              display: "flex",
-              flexDirection: "row",
-              justifyContent: "center",
-              alignItems: "center",
-              paddingLeft: 16,
-              paddingRight: 6,
-              gap: 10,
-              width: 103.5,
-              height: 22,
-            }}
-          >
-            <Text
-              style={{
-                width: 36,
-                height: 22,
-                fontFamily: "Inter",
-                fontWeight: "600",
-                fontSize: 17,
-                lineHeight: 22,
-                textAlign: "center",
-                color: "#000000",
-              }}
-            >
-              9:41
-            </Text>
-          </View>
-
-          {/* Battery and signals */}
-          <View
-            style={{
-              display: "flex",
-              flexDirection: "row",
-              justifyContent: "center",
-              alignItems: "center",
-              paddingLeft: 6,
-              paddingRight: 16,
-              gap: 7,
-              width: 103.5,
-              height: 13,
-            }}
-          >
-            {/* Cellular Connection */}
-            <View
-              style={{
-                width: 19.2,
-                height: 12.23,
-                backgroundColor: "#000000",
-              }}
-            />
-            {/* Wifi */}
-            <View
-              style={{
-                width: 17.14,
-                height: 12.33,
-                backgroundColor: "#000000",
-              }}
-            />
-            {/* Battery */}
-            <View
-              style={{
-                width: 27.33,
-                height: 13,
-                position: "relative",
-              }}
-            >
-              {/* Border */}
-              <View
-                style={{
-                  position: "absolute",
-                  width: 25,
-                  height: 13,
-                  left: 1.17,
-                  top: 0,
-                  borderWidth: 1,
-                  borderColor: "#000000",
-                  borderRadius: 4.3,
-                  opacity: 0.35,
-                }}
-              />
-              {/* Cap */}
-              <View
-                style={{
-                  position: "absolute",
-                  width: 1.33,
-                  height: 4,
-                  left: 26,
-                  top: 4.5,
-                  backgroundColor: "#000000",
-                  opacity: 0.4,
-                }}
-              />
-              {/* Capacity */}
-              <View
-                style={{
-                  position: "absolute",
-                  width: 21,
-                  height: 9,
-                  left: 3.17,
-                  top: 2,
-                  backgroundColor: "#000000",
-                  borderRadius: 2.5,
-                }}
-              />
-            </View>
-          </View>
-        </View>
-
+    <>
+      <StatusBar barStyle="dark-content" backgroundColor="#FDFDFD" />
+      <SafeAreaView style={{
+        flex: 1,
+        backgroundColor: '#FDFDFD'
+      }}>
         {/* Header */}
-        <View
-          style={{
-            position: "absolute",
-            width: 180,
-            height: 22,
-            left: "50%",
-            marginLeft: -90,
-            top: 59,
-          }}
-        >
-          <Text
+        <View style={{
+          flexDirection: isRTL ? 'row-reverse' : 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          paddingHorizontal: 15,
+          paddingVertical: 10,
+          marginTop: 15
+        }}>
+          <TouchableOpacity
+            onPress={() => router.back()}
             style={{
-              fontFamily: "Inter",
-              fontWeight: "600",
-              fontSize: 18,
-              lineHeight: 22,
-              textAlign: "center",
-              color: "#000000",
+              width: 40,
+              height: 40,
+              justifyContent: 'center',
+              alignItems: 'center'
             }}
           >
-            Password & Security
+            <ChevronLeft 
+              size={24} 
+              color="#000000" 
+              strokeWidth={2}
+              style={{ transform: [{ scaleX: isRTL ? -1 : 1 }] }}
+            />
+          </TouchableOpacity>
+
+          <Text style={{
+            fontSize: 18,
+            fontWeight: '600',
+            color: '#000000',
+            textAlign: 'center',
+            flex: 1
+          }}>
+            {t('password.title')}
           </Text>
+
+          <View style={{ width: 40 }} />
         </View>
 
-        {/* Back Button */}
-        <TouchableOpacity
-          onPress={handleCancel}
-          style={{
-            position: "absolute",
-            left: 14,
-            top: 64,
-            width: 12,
-            height: 12,
-          }}
-        >
-          <ChevronLeft size={12} color="#000000" strokeWidth={2} />
-        </TouchableOpacity>
-
-        {/* Form Container */}
-        <View
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-start",
-            padding: 0,
-            gap: 24,
-            position: "absolute",
-            width: 345,
-            height: 239.71,
-            left: "50%",
-            marginLeft: -172.5,
-            top: 122,
-          }}
-        >
-          {/* Old Password Field */}
-          <View
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-start",
-              padding: 0,
-              gap: 5.9,
-              width: 345,
-              height: 63.9,
-            }}
-          >
-            <Text
-              style={{
-                width: 345,
-                height: 9,
-                fontFamily: "Inter",
-                fontWeight: "500",
+        <ScrollView style={{ flex: 1, paddingTop: 20 }}>
+          {/* Form Fields */}
+          <View style={{
+            paddingHorizontal: 15,
+            gap: 24
+          }}>
+            {/* Old Password */}
+            <View>
+              <Text style={{
                 fontSize: 12,
-                lineHeight: 15,
-                color: "#7E7E7E",
-              }}
-            >
-              Old Password
-            </Text>
-            <View
-              style={{
-                display: "flex",
-                flexDirection: "row",
-                alignItems: "center",
-                paddingVertical: 11.7,
-                paddingHorizontal: 8.65,
-                gap: 4.07,
-                width: 345,
-                height: 49,
-                borderWidth: 0.51,
-                borderColor: "#E5E5E5",
-                borderRadius: 14,
-              }}
-            >
+                fontWeight: '500',
+                color: '#7E7E7E',
+                marginBottom: 6,
+                textAlign: isRTL ? 'right' : 'left'
+              }}>
+                {t('password.old_password')}
+              </Text>
               <TextInput
                 style={{
-                  flex: 1,
-                  height: 25,
-                  fontFamily: "Inter",
-                  fontWeight: "500",
+                  borderWidth: 1,
+                  borderColor: '#E5E5E5',
+                  borderRadius: 14,
+                  padding: 12,
                   fontSize: 12,
-                  lineHeight: 15,
-                  color: "#000000",
+                  color: '#1F1F1F',
+                  textAlign: isRTL ? 'right' : 'left'
                 }}
-                placeholder="Enter your old password"
+                placeholder={t('password.old_password_placeholder')}
                 placeholderTextColor="#A1A0A0"
-                secureTextEntry
                 value={oldPassword}
                 onChangeText={setOldPassword}
+                secureTextEntry
               />
             </View>
-          </View>
 
-          {/* New Password Field */}
-          <View
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-start",
-              padding: 0,
-              gap: 5.9,
-              width: 345,
-              height: 63.9,
-            }}
-          >
-            <Text
-              style={{
-                width: 345,
-                height: 9,
-                fontFamily: "Inter",
-                fontWeight: "500",
+            {/* New Password */}
+            <View>
+              <Text style={{
                 fontSize: 12,
-                lineHeight: 15,
-                color: "#7E7E7E",
-              }}
-            >
-              New Password
-            </Text>
-            <View
-              style={{
-                display: "flex",
-                flexDirection: "row",
-                alignItems: "center",
-                paddingVertical: 11.7,
-                paddingHorizontal: 8.65,
-                gap: 4.07,
-                width: 345,
-                height: 49,
-                borderWidth: 0.51,
-                borderColor: "#E5E5E5",
-                borderRadius: 14,
-              }}
-            >
+                fontWeight: '500',
+                color: '#7E7E7E',
+                marginBottom: 6,
+                textAlign: isRTL ? 'right' : 'left'
+              }}>
+                {t('password.new_password')}
+              </Text>
               <TextInput
                 style={{
-                  flex: 1,
-                  height: 25,
-                  fontFamily: "Inter",
-                  fontWeight: "500",
+                  borderWidth: 1,
+                  borderColor: '#E5E5E5',
+                  borderRadius: 14,
+                  padding: 12,
                   fontSize: 12,
-                  lineHeight: 15,
-                  color: "#000000",
+                  color: '#1F1F1F',
+                  textAlign: isRTL ? 'right' : 'left'
                 }}
-                placeholder="Enter your new password"
+                placeholder={t('password.new_password_placeholder')}
                 placeholderTextColor="#A1A0A0"
-                secureTextEntry
                 value={newPassword}
-                onChangeText={setNewPassword}
+                onChangeText={handleNewPasswordChange}
+                secureTextEntry
               />
+              
+              {/* Password Validation */}
+              {newPassword.length > 0 && (
+                <View style={{
+                  marginTop: 8,
+                  padding: 12,
+                  backgroundColor: '#F8F9FA',
+                  borderRadius: 8
+                }}>
+                  <ValidationItem 
+                    isValid={validation.minLength} 
+                    text={t('password.validation.min_length')} 
+                  />
+                  <ValidationItem 
+                    isValid={validation.hasUppercase} 
+                    text={t('password.validation.uppercase')} 
+                  />
+                  <ValidationItem 
+                    isValid={validation.hasLowercase} 
+                    text={t('password.validation.lowercase')} 
+                  />
+                  <ValidationItem 
+                    isValid={validation.hasNumber} 
+                    text={t('password.validation.number')} 
+                  />
+                  <ValidationItem 
+                    isValid={validation.hasSpecialChar} 
+                    text={t('password.validation.special_char')} 
+                  />
+                </View>
+              )}
             </View>
-          </View>
 
-          {/* Confirm Password Field */}
-          <View
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-start",
-              padding: 0,
-              gap: 5.9,
-              width: 345,
-              height: 63.9,
-            }}
-          >
-            <Text
-              style={{
-                width: 345,
-                height: 9,
-                fontFamily: "Inter",
-                fontWeight: "500",
+            {/* Confirm Password */}
+            <View>
+              <Text style={{
                 fontSize: 12,
-                lineHeight: 15,
-                color: "#7E7E7E",
-              }}
-            >
-              Confirm Password
-            </Text>
-            <View
-              style={{
-                display: "flex",
-                flexDirection: "row",
-                alignItems: "center",
-                paddingVertical: 11.7,
-                paddingHorizontal: 8.65,
-                gap: 4.07,
-                width: 345,
-                height: 49,
-                borderWidth: 0.51,
-                borderColor: "#E5E5E5",
-                borderRadius: 14,
-              }}
-            >
+                fontWeight: '500',
+                color: '#7E7E7E',
+                marginBottom: 6,
+                textAlign: isRTL ? 'right' : 'left'
+              }}>
+                {t('password.confirm_password')}
+              </Text>
               <TextInput
                 style={{
-                  flex: 1,
-                  height: 25,
-                  fontFamily: "Inter",
-                  fontWeight: "500",
+                  borderWidth: 1,
+                  borderColor: '#E5E5E5',
+                  borderRadius: 14,
+                  padding: 12,
                   fontSize: 12,
-                  lineHeight: 15,
-                  color: "#000000",
+                  color: '#1F1F1F',
+                  textAlign: isRTL ? 'right' : 'left'
                 }}
-                placeholder="Confirm your new password"
+                placeholder={t('password.confirm_password_placeholder')}
                 placeholderTextColor="#A1A0A0"
-                secureTextEntry
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
+                secureTextEntry
               />
+              
+              {/* Password Match Validation */}
+              {confirmPassword.length > 0 && newPassword.length > 0 && (
+                <View style={{ marginTop: 8 }}>
+                  <ValidationItem 
+                    isValid={newPassword === confirmPassword} 
+                    text={newPassword === confirmPassword ? 'Passwords match' : t('password.validation.passwords_match')} 
+                  />
+                </View>
+              )}
             </View>
           </View>
-        </View>
+        </ScrollView>
 
         {/* Action Buttons */}
-        <View
-          style={{
-            display: "flex",
-            flexDirection: "row",
-            alignItems: "center",
-            padding: 0,
-            gap: 11.81,
-            position: "absolute",
-            width: 154.26,
-            height: 37,
-            left: 207.74,
-            top: 634,
-          }}
-        >
+        <View style={{
+          flexDirection: isRTL ? 'row-reverse' : 'row',
+          alignItems: 'center',
+          paddingHorizontal: 15,
+          paddingBottom: 24,
+          gap: 12
+        }}>
           {/* Cancel Button */}
           <TouchableOpacity
-            onPress={handleCancel}
+            onPress={() => router.back()}
             style={{
-              display: "flex",
-              flexDirection: "row",
-              alignItems: "center",
-              padding: 0,
-              gap: 2.95,
-              width: 57.95,
-              height: 14,
+              flexDirection: isRTL ? 'row-reverse' : 'row',
+              alignItems: 'center',
+              gap: 3
             }}
           >
-            <View style={{ width: 14, height: 14 }}>
-              <X size={14} color="#5B5B5B" strokeWidth={1.17} />
+            <View style={{
+              width: 14,
+              height: 14,
+              justifyContent: 'center',
+              alignItems: 'center'
+            }}>
+              <X size={12} color="#5B5B5B" strokeWidth={1.5} />
             </View>
-            <Text
-              style={{
-                width: 41,
-                height: 14,
-                fontFamily: "Inter",
-                fontWeight: "600",
-                fontSize: 12,
-                lineHeight: 14,
-                textAlign: "center",
-                color: "#5B5B5B",
-              }}
-            >
-              Cancel
+            <Text style={{
+              fontSize: 12,
+              fontWeight: '600',
+              color: '#5B5B5B',
+              textAlign: 'center'
+            }}>
+              {t('common.cancel')}
             </Text>
           </TouchableOpacity>
 
           {/* Save Button */}
           <TouchableOpacity
             onPress={handleSave}
-            disabled={isLoading}
+            disabled={isLoading || !oldPassword || !newPassword || !confirmPassword || !isPasswordValid() || newPassword !== confirmPassword}
             style={{
-              display: "flex",
-              flexDirection: "row",
-              justifyContent: "center",
-              alignItems: "center",
-              paddingVertical: 6.17,
-              paddingHorizontal: 17.88,
-              gap: 4.93,
-              width: 84.5,
-              height: 37,
-              backgroundColor: "#E72858",
+              flexDirection: isRTL ? 'row-reverse' : 'row',
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: 6,
+              paddingHorizontal: 18,
+              backgroundColor: '#E72858',
               borderRadius: 740,
+              gap: 5,
+              opacity: (isLoading || !oldPassword || !newPassword || !confirmPassword || !isPasswordValid() || newPassword !== confirmPassword) ? 0.6 : 1
             }}
           >
-            {isLoading ? (
-              <ActivityIndicator size="small" color="#FFFFFF" />
-            ) : (
-              <>
-                <View style={{ width: 14.8, height: 14.8 }}>
-                  <Check size={14.8} color="#FFFFFF" strokeWidth={1.23} />
-                </View>
-                <Text
-                  style={{
-                    width: 29,
-                    height: 15,
-                    fontFamily: "Inter",
-                    fontWeight: "600",
-                    fontSize: 12,
-                    lineHeight: 15,
-                    textAlign: "center",
-                    color: "#FFFFFF",
-                  }}
-                >
-                  Save
-                </Text>
-              </>
-            )}
+            <View style={{
+              width: 15,
+              height: 15,
+              justifyContent: 'center',
+              alignItems: 'center'
+            }}>
+              <Check size={12} color="#FFFFFF" strokeWidth={1.5} />
+            </View>
+            <Text style={{
+              fontSize: 12,
+              fontWeight: '600',
+              color: '#FFFFFF',
+              textAlign: 'center'
+            }}>
+              {isLoading ? t('common.loading') : t('common.save')}
+            </Text>
           </TouchableOpacity>
         </View>
-
-        {/* Bottom Navigation */}
-        <View
-          style={{
-            position: "absolute",
-            width: 375,
-            height: 92,
-            left: "50%",
-            marginLeft: -187.5,
-            bottom: 0,
-          }}
-        >
-          {/* Background */}
-          <View
-            style={{
-              position: "absolute",
-              width: 375,
-              height: 92,
-              left: 0,
-              bottom: 0,
-              backgroundColor: "#FFFFFF",
-              borderWidth: 1,
-              borderColor: "#EEEEEE",
-              shadowColor: "#C7C7C7",
-              shadowOffset: { width: 8, height: -130 },
-              shadowOpacity: 0.01,
-              shadowRadius: 52,
-              elevation: 10,
-            }}
-          />
-
-          {/* Navigation Items */}
-          <View
-            style={{
-              display: "flex",
-              flexDirection: "row",
-              justifyContent: "center",
-              alignItems: "center",
-              padding: 0,
-              gap: 7,
-              position: "absolute",
-              width: 339,
-              height: 52,
-              left: "50%",
-              marginLeft: -169.5,
-              bottom: 24.4,
-            }}
-          >
-            {/* Feed */}
-            <View
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                padding: 0,
-                width: 63,
-                height: 46.6,
-              }}
-            >
-              <View style={{ width: 21.6, height: 21.6 }}>
-                {/* Feed Icon */}
-                <View
-                  style={{
-                    position: "absolute",
-                    left: "12.5%",
-                    right: "12.5%",
-                    top: "9.44%",
-                    bottom: "12.5%",
-                    borderWidth: 1.8,
-                    borderColor: "#1F1F1F",
-                  }}
-                />
-              </View>
-              <Text
-                style={{
-                  width: 26,
-                  height: 25,
-                  fontFamily: "Inter",
-                  fontWeight: "500",
-                  fontSize: 11,
-                  lineHeight: 25,
-                  color: "#1F1F1F",
-                }}
-              >
-                Feed
-              </Text>
-            </View>
-
-            {/* Communities */}
-            <View
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                padding: 0,
-                width: 70,
-                height: 46.6,
-              }}
-            >
-              <View style={{ width: 21.6, height: 21.6 }}>
-                {/* Communities Icon */}
-                <View
-                  style={{
-                    position: "absolute",
-                    left: "8.33%",
-                    right: "8.33%",
-                    top: "12.5%",
-                    bottom: "12.5%",
-                    borderWidth: 1.8,
-                    borderColor: "#1F1F1F",
-                  }}
-                />
-              </View>
-              <Text
-                style={{
-                  width: 70,
-                  height: 25,
-                  fontFamily: "Inter",
-                  fontWeight: "500",
-                  fontSize: 11,
-                  lineHeight: 25,
-                  color: "#1F1F1F",
-                }}
-              >
-                Communities
-              </Text>
-            </View>
-
-            {/* Plus Button (Center) */}
-            <View
-              style={{
-                display: "flex",
-                flexDirection: "row",
-                justifyContent: "center",
-                alignItems: "center",
-                paddingVertical: 8.67,
-                paddingHorizontal: 25.13,
-                gap: 6.93,
-                width: 52,
-                height: 52,
-                backgroundColor: "#000000",
-                borderRadius: 1040,
-              }}
-            >
-              <View style={{ width: 20.8, height: 20.8 }}>
-                {/* Plus Icon */}
-                <View
-                  style={{
-                    position: "absolute",
-                    left: "12.49%",
-                    right: "12.51%",
-                    top: "12.5%",
-                    bottom: "12.5%",
-                    borderWidth: 1.73,
-                    borderColor: "#FFFFFF",
-                  }}
-                />
-              </View>
-            </View>
-
-            {/* Shop */}
-            <View
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                padding: 0,
-                width: 63,
-                height: 46.6,
-              }}
-            >
-              <View style={{ width: 21.6, height: 21.6 }}>
-                {/* Shop Icon */}
-                <View
-                  style={{
-                    position: "absolute",
-                    left: "11.82%",
-                    right: "11.82%",
-                    top: "8.33%",
-                    bottom: "8.33%",
-                    borderWidth: 1.8,
-                    borderColor: "#1F1F1F",
-                  }}
-                />
-              </View>
-              <Text
-                style={{
-                  width: 28,
-                  height: 25,
-                  fontFamily: "Inter",
-                  fontWeight: "500",
-                  fontSize: 11,
-                  lineHeight: 25,
-                  color: "#1F1F1F",
-                }}
-              >
-                Shop
-              </Text>
-            </View>
-
-            {/* Account */}
-            <View
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                padding: 0,
-                width: 63,
-                height: 46.6,
-              }}
-            >
-              <View style={{ width: 21.6, height: 21.6 }}>
-                {/* Account Icon */}
-                <View
-                  style={{
-                    position: "absolute",
-                    left: "15.18%",
-                    right: "15.18%",
-                    top: "62.5%",
-                    bottom: "12.5%",
-                    borderWidth: 1.8,
-                    borderColor: "#1F1F1F",
-                  }}
-                />
-                <View
-                  style={{
-                    position: "absolute",
-                    left: "31.25%",
-                    right: "31.25%",
-                    top: "12.5%",
-                    bottom: "50%",
-                    borderWidth: 1.8,
-                    borderColor: "#1F1F1F",
-                  }}
-                />
-              </View>
-              <Text
-                style={{
-                  width: 44,
-                  height: 25,
-                  fontFamily: "Inter",
-                  fontWeight: "500",
-                  fontSize: 11,
-                  lineHeight: 25,
-                  color: "#1F1F1F",
-                }}
-              >
-                Account
-              </Text>
-            </View>
-          </View>
-        </View>
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </>
   );
 }

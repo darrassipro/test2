@@ -1,0 +1,46 @@
+{
+  "common": {
+    "ok": "OK",
+    "cancel": "Cancel",
+    "save": "Save",
+    "back": "Back",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success"
+  },
+  "language": {
+    "title": "Language",
+    "changed": "Language Changed",
+    "changed_message": "The app language has been updated successfully. Some changes may require restarting the app.",
+    "error_message": "Failed to save language preference. Please try again.",
+    "info": "Changing the language will update the app interface. Some content may still appear in the original language until the app is restarted.",
+    "english": "English",
+    "french": "French",
+    "arabic": "Arabic"
+  },
+  "password": {
+    "title": "Password & Security",
+    "old_password": "Old Password",
+    "new_password": "New Password",
+    "confirm_password": "Confirm Password",
+    "old_password_placeholder": "Enter your current password",
+    "new_password_placeholder": "Enter your new password",
+    "confirm_password_placeholder": "Confirm your new password",
+    "change_success": "Password Changed Successfully",
+    "change_success_message": "Your password has been updated successfully.",
+    "change_error": "Password Change Failed",
+    "validation": {
+      "required": "This field is required",
+      "min_length": "Password must be at least 8 characters long",
+      "uppercase": "Password must contain at least one uppercase letter",
+      "lowercase": "Password must contain at least one lowercase letter",
+      "number": "Password must contain at least one number",
+      "special_char": "Password must contain at least one special character",
+      "passwords_match": "Passwords do not match"
+    }
+  },
+  "profile": {
+    "switch_language": "Switch Language",
+    "password_security": "Password & Security"
+  }
+}
