@@ -41,6 +41,9 @@ export default function UpdateCommunity() {
   // Initialize form with existing data
   useEffect(() => {
     if (community) {
+      console.log('Community data received:', community);
+      console.log('Community files:', community.communityFiles);
+      
       setName(community.name || '');
       setDescription(community.description || '');
       setCountry(community.country || '');
@@ -49,9 +52,14 @@ export default function UpdateCommunity() {
       setWhatsappLink(community.whatsappLink || '');
 
       // Set existing images
-      if (community.communityFiles) {
-        const principal = community.communityFiles.find((file: any) => file.isPrincipale);
-        const gallery = community.communityFiles.filter((file: any) => !file.isPrincipale);
+      if (community.communityFiles && Array.isArray(community.communityFiles)) {
+        console.log('Processing community files:', community.communityFiles);
+        
+        const principal = community.communityFiles.find((file: any) => file.isPrincipale === true);
+        const gallery = community.communityFiles.filter((file: any) => file.isPrincipale === false);
+        
+        console.log('Principal image found:', principal);
+        console.log('Gallery images found:', gallery);
         
         if (principal) {
           setPrincipalImage({ uri: principal.url, existing: true, url: principal.url });
@@ -62,6 +70,8 @@ export default function UpdateCommunity() {
           existing: true, 
           url: file.url 
         })));
+      } else {
+        console.log('No community files found or not an array');
       }
     }
   }, [community]);
