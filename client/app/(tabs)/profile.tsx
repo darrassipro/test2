@@ -78,7 +78,9 @@ export default function Profile() {
       label: "Password & Security",
       iconComponent: Lock,
       color: "#000000",
-      onPress: () => {},
+      onPress: () => {
+        router.push('/password-security');
+      },
     },
     {
       id: "contact-support",
@@ -177,7 +179,9 @@ export default function Profile() {
       label: "Password & Security",
       iconComponent: Lock,
       color: "#1F1F1F",
-      onPress: () => {},
+      onPress: () => {
+        router.push('/password-security');
+      },
     },
     {
       id: "contact-support",
