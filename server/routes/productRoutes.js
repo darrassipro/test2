@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/authEnhanced'); 
 const { checkProductAccess } = require('../middleware/checkProductAccess'); 
-const productController = require('../controllers/productController'); 
+const productController = require('../controllers/productController');
+const { checkAdminRole } = require('../middleware/checkAdminRole'); 
 const { 
    uploadProduct
 } = require('../config/cloudinary'); 
@@ -16,9 +17,13 @@ router.post(
    '/',
    authenticateToken,
    uploadProductAssets, 
-   checkProductAccess('create'), 
    productController.createProduct
 );
+// Mes Produits 
+router.get('/myProducts', authenticateToken, productController.getMyProducts);
+
+// Mes Produits par catégorie
+router.get('/myProducts/categories/:categoryId', authenticateToken, productController.getMyProductsByCategory);
 
 //  Obtenir les produits d’une communaute (GET /api/products/communities/:communityId)
 router.get(
@@ -46,7 +51,7 @@ router.patch(
    '/:communityId/:id', 
    authenticateToken,
    uploadProductAssets, 
-   checkProductAccess('manage'), 
+   checkProductAccess, 
    productController.updateProduct
 );
 
@@ -54,7 +59,7 @@ router.patch(
 router.delete(
    '/:communityId/:id', 
    authenticateToken,
-   checkProductAccess('manage'), 
+   checkProductAccess, 
    productController.deleteProduct
 );
 
@@ -70,6 +75,22 @@ router.post(
    '/:id/command',
    authenticateToken, 
    productController.incrementProductCommands
+);
+
+// PUT /api/:communityId/:productId/approve
+router.put(
+    '/:communityId/:productId/approve',
+    authenticateToken,
+    checkAdminRole('admin'), 
+    productController.approvePendingProduct
+);
+
+// PUT /api/products/:communityId/:productId/reject
+router.put(
+    '/:communityId/:productId/reject',
+    authenticateToken,
+    checkAdminRole('admin'), 
+    productController.rejectPendingProduct
 );
 
 

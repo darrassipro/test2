@@ -127,6 +127,24 @@ exports.getCategoryById = async (req, res) => {
     }
 };
 
+// exports.getCategoriesByType = async (req, res) => {
+//     const { type } = req.query; 
+
+//     if (!type || (type !== 'digital' && type !== 'physical')) {
+//         return res.status(400).json({ message: "Veuillez préciser le type de produit (digital ou physique)." });
+//     }
+
+//     try {
+//         const categories = await ProductCategory.findAll({
+//             where: { type: type } 
+//         });
+
+//         res.status(200).json(categories);
+//     } catch (error) {
+//         // ...
+//     }
+// };
+
 /**
  * @description Met à jour le nom d'une catégorie.
  * @access Private (Super-Admin seulement)

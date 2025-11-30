@@ -99,6 +99,7 @@ const  adminRouter  = require('./routes/adminRoutes');
 const  productCategoryRouter  = require('./routes/productCategoryRoutes');
 const  productRouter  = require('./routes/productRoutes');
 const  routeRouter  = require('./routes/routeRoutes');
+const  bookingRouter  = require('./routes/bookingRoutes');
 
 // Enregistrer les routes avec le préfixe /api
 app.use('/api/auth', authRouter);
@@ -113,6 +114,7 @@ app.use('/api/admin/communities', adminRouter);
 app.use('/api/product-categories', productCategoryRouter);
 app.use('/api/products', productRouter);
 app.use('/api/routes', routeRouter);
+app.use('/api/booking', bookingRouter);
 
 // Route de test pour vérifier que le serveur fonctionne
 app.get('/api/health', (req, res) => {

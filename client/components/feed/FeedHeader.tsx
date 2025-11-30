@@ -17,7 +17,11 @@ export default function FeedHeader() {
             <Bell size={24} color="#000" />
             <MessageCircle size={24} color="#000" />
             <Image
-              source={{ uri: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100' }}
+              source={
+                user?.profileImage
+                  ? { uri: user.profileImage }
+                  : { uri: 'https://images.pexels.com/photos/220453/pexels-photo-220453.jpeg?auto=compress&cs=tinysrgb&w=100' }
+              }
               className="w-8 h-8 rounded-full"
             />
           </View>

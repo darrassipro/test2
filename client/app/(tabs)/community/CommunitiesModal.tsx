@@ -7,6 +7,8 @@ import { useGetAllCommunitiesQuery, useGetCommunitiesNotJoinedQuery } from '@/se
 export default function CommunitiesModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
+  // track which community was tapped so we can show the checked state
+  const [selectedCommunityId, setSelectedCommunityId] = useState<string | null>(null);
 
   const { data: allResp, isLoading: loadingAll } = useGetAllCommunitiesQuery({ page: 1, limit: 50 }, { skip: !visible });
   const { data: notJoinedResp, isLoading: loadingNotJoined } = useGetCommunitiesNotJoinedQuery({ page: 1, limit: 50 }, { skip: !visible });
@@ -17,8 +19,13 @@ export default function CommunitiesModal({ visible, onClose }: { visible: boolea
   const myCommunities = all.filter((c: any) => !notJoinedIds.has(c.id));
 
   const isLoading = loadingAll || loadingNotJoined;
+  const formatMembers = (count: number | null | undefined) => {
+    const n = Number(count) || 0;
+    if (n >= 1000000) return `${(n / 1000000).toFixed(1).replace(/\.0$/, '')}M Members`;
+    if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}K Members`;
+    return `${n} Members`;
+  };
 
-  // Filter communities based on search query
   const filteredCommunities = myCommunities.filter((c: any) => 
     c.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -34,8 +41,13 @@ export default function CommunitiesModal({ visible, onClose }: { visible: boolea
   };
 
   const handleSelectCommunity = (community: any) => {
-    onClose();
-    router.push(`/create-post?communityId=${community.id}` as any);
+    // mark selected so the item shows a filled check
+    setSelectedCommunityId(String(community.id));
+    // small delay to let the UI show the selection briefly before closing/navigating
+    setTimeout(() => {
+      onClose();
+      router.push(`/create-post?communityId=${community.id}` as any);
+    }, 180);
   };
 
   return (
@@ -121,7 +133,6 @@ export default function CommunitiesModal({ visible, onClose }: { visible: boolea
                 renderItem={({ item }) => {
                   const avatarUri = item.creator?.profileImage || item.communityFiles?.[0]?.url || 'https://via.placeholder.com/41';
                   const memberCount = item.totalMembers || 0;
-
                   return (
                     <TouchableOpacity
                       onPress={() => handleSelectCommunity(item)}
@@ -169,19 +180,24 @@ export default function CommunitiesModal({ visible, onClose }: { visible: boolea
                             lineHeight: 14,
                             color: '#5B5B5B',
                           }}>
-                            {memberCount}K Members
+                              {formatMembers(memberCount)}
                           </Text>
                         </View>
                       </View>
 
                       {/* Check Circle Icon */}
-                      <View style={{ 
+                      <View style={{
                         position: 'absolute',
                         right: 0,
                         top: '50%',
                         transform: [{ translateY: -12 }],
                       }}>
-                        <CheckCircle size={24} color="#E72858" fill="#E72858" />
+                        {selectedCommunityId === String(item.id) ? (
+                          <CheckCircle size={24} color="#f00a0aff" fill="none" />
+                        ) : (
+                          // outlined/muted state for non-selected items
+                          <CheckCircle size={24} color="#BDBDBD" fill="none" />
+                        )}
                       </View>
                     </TouchableOpacity>
                   );

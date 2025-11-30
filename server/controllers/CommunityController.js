@@ -1,7 +1,8 @@
-const { Community, CommunityFile, CommunityMembership , User, Post, PostCategory, RCommCategory, CommCategory , Admin} = require('../models/index');
+const { Community, CommunityFile, CommunityMembership , User, Post, PostCategory, RCommCategory, CommCategory , Admin, PostFile, Product} = require('../models/index');
 const { getUserRole } = require('../middleware/checkAdminRole');
-const { deleteFile } = require('../config/cloudinary'); 
-const { Op } = require('sequelize');
+const { deleteFile } = require('../config/cloudinary');
+const sequelize = require('sequelize'); 
+const { Op, literal } = require('sequelize');
 
 /**
  * @description Créer une nouvelle communauté (Community) et associer les catégories et les fichiers.
@@ -10,8 +11,27 @@ const { Op } = require('sequelize');
  */
 exports.createCommunity = async (req, res) => {
     const { name, description, isPremium, price, categoryIds } = req.body;
-    const uploadedFiles = req.files; 
+    const { images, videos, audios, virtualTours } = req.files;
+    const uploadedFiles = [];
+
+if (images && images.length > 0) {
+    uploadedFiles.push(...images);
+}
+
+if (videos && videos.length > 0) {
+    uploadedFiles.push(...videos);
+}
+
+if (audios && audios.length > 0) {
+    uploadedFiles.push(...audios);
+} 
+if (virtualTours && virtualTours.length > 0) {
+    uploadedFiles.push(...virtualTours);
+}
     
+if (uploadedFiles.length > 0) {
+    console.log("Uploaded File Example Properties:", uploadedFiles[0]);
+}
     const creatorUserId = req.user.userId; 
 
     if (!name || name.length < 3) {
@@ -60,13 +80,25 @@ exports.createCommunity = async (req, res) => {
         createdCommunity = await Community.create(communityData);
 
         if (uploadedFiles && uploadedFiles.length > 0) {
-            const filesToCreate = uploadedFiles.map((file, index) => ({
-                communityId: createdCommunity.id,
-                url: file.path,
-                cloudinaryId: file.filename,
-                type: file.mimetype,
-                isPrincipale: index === 0 
-            }));
+            // Map roles sent in the form-data (multiple 'roles' fields) to uploaded files by index
+            let rolesArray = [];
+            if (req.body && req.body.roles) {
+                if (Array.isArray(req.body.roles)) rolesArray = req.body.roles;
+                else rolesArray = [req.body.roles];
+            }
+
+            const filesToCreate = uploadedFiles.map((file, index) => {
+                const roleFromBody = rolesArray[index];
+                const role = roleFromBody || file.role || 'gallery';
+                return {
+                    communityId: createdCommunity.id,
+                    url: file.path || file.secure_url,
+                    cloudinaryId: file.filename || file.public_id,
+                    type: file.mimetype,
+                    role: role,
+                    isPrincipale: role === 'banner'
+                };
+            });
 
             await CommunityFile.bulkCreate(filesToCreate);
         }
@@ -100,12 +132,12 @@ exports.createCommunity = async (req, res) => {
                 {
                     model: CommunityFile,
                     as: 'communityFiles',
-                    attributes: ['url', 'type', 'isPrincipale']
+                    attributes: ['url', 'type', 'isPrincipale', 'role']
                 },
                 {
                     model: CommCategory,
                     as: 'categories', 
-                    attributes: ['id', 'name']
+                    attributes: ['id', 'name','imageUrl']
                 }
             ]
         });
@@ -216,8 +248,8 @@ exports.getAllCommunities = async (req, res) => {
                 { 
                     model: CommunityFile,
                     as: 'communityFiles',
-                    attributes: ['url', 'isPrincipale'],
-                    limit: 1 
+                    attributes: ['url', 'isPrincipale', 'role'],
+                    limit: 10 // allow up to 10 files to get all roles
                 }
             ],
             attributes: [
@@ -272,9 +304,9 @@ exports.getCommunity = async (req, res) => {
             where: { communityId: communityId }
         });
         
-        // const totalProductsCount = await Product.count({ 
-        //     where: { communityId: communityId } 
-        // });
+          const totalProductsCount = await Product.count({ 
+              where: { communityId: communityId } 
+          });
         const communityInformations = await Community.findByPk(communityId, {
             attributes: [
                 'id', 'name', 'description', 'isVerified', 'totalMembers', 
@@ -289,7 +321,7 @@ exports.getCommunity = async (req, res) => {
                 { 
                     model: CommunityFile,
                     as: 'communityFiles',
-                    attributes: ['url', 'type', 'isPrincipale']
+                    attributes: ['url', 'type', 'isPrincipale', 'role']
                 }
             ]
         });
@@ -297,12 +329,16 @@ exports.getCommunity = async (req, res) => {
         const communityData = communityInformations.get({ plain: true });
 
         communityData.totalPosts = totalPostsCount;
-        //communityData.totalProducts = totalProductsCount;
+        communityData.totalProducts = totalProductsCount;
 
          await Community.update(
              { totalPosts: totalPostsCount },
              { where: { id: communityId } }
          );
+         await Community.update(
+    { totalProducts: totalProductsCount },
+    { where: { id: communityId } }
+);
         
         if (!isUserMemberShip) {
 
@@ -405,11 +441,15 @@ exports.getCommunity = async (req, res) => {
 exports.updateCommunity = async (req, res) => {
     const communityId = req.params.id;
     const { name, description, isPremium, price, filesToDelete, principalFileId } = req.body; 
-    const uploadedFiles = req.files; 
+    const { images, videos, audios, virtualTours } = req.files || {};
     const userId = req.user.userId;
+    const allUploadedFiles = [];
+if (images) allUploadedFiles.push(...images);
+if (videos) allUploadedFiles.push(...videos);
+if (audios) allUploadedFiles.push(...audios);
+if (virtualTours) allUploadedFiles.push(...virtualTours);
 
-    let newPublicIds = uploadedFiles ? uploadedFiles.map(f => f.filename) : [];
-
+    let newPublicIds = allUploadedFiles.map(f => f.filename);
     try {
         const community = await Community.findOne({
             where: { 
@@ -464,13 +504,21 @@ exports.updateCommunity = async (req, res) => {
             }
         }
         
-        if (uploadedFiles && uploadedFiles.length > 0) {
-            const filesToCreate = uploadedFiles.map((file) => ({
+        if (allUploadedFiles && allUploadedFiles.length > 0) {
+            // Map optional roles sent alongside uploads when updating
+            let rolesArray = [];
+            if (req.body && req.body.roles) {
+                if (Array.isArray(req.body.roles)) rolesArray = req.body.roles;
+                else rolesArray = [req.body.roles];
+            }
+
+            const filesToCreate = allUploadedFiles.map((file, index) => ({
                 communityId: communityId,
                 url: file.path,
                 cloudinaryId: file.filename,
                 type: file.mimetype,
-                isPrincipale: false 
+                role: rolesArray[index] || 'gallery',
+                isPrincipale: (rolesArray[index] === 'banner') || false
             }));
 
             await CommunityFile.bulkCreate(filesToCreate);
@@ -488,7 +536,7 @@ exports.updateCommunity = async (req, res) => {
 
         const updatedCommunity = await Community.findByPk(communityId, {
              include: [
-                { model: CommunityFile, as: 'communityFiles', attributes: ['url', 'type', 'isPrincipale', 'id'] },
+                { model: CommunityFile, as: 'communityFiles', attributes: ['url', 'type', 'isPrincipale', 'id', 'role'] },
                 { model: User, as: 'creator', attributes: ['id', 'firstName', 'lastName', 'profileImage'] }
             ]
         });
@@ -500,11 +548,11 @@ exports.updateCommunity = async (req, res) => {
         });
 
     } catch (error) {
-        if (newPublicIds.length > 0) {
-            newPublicIds.forEach(async (publicId) => {
-                await deleteFile(publicId).catch(e => console.error("Erreur de nettoyage Cloudinary:", e));
-            });
-        }
+        if (newPublicIds && newPublicIds.length > 0) {
+        newPublicIds.forEach(async (publicId) => {
+            await deleteFile(publicId).catch(e => console.error("Erreur de nettoyage Cloudinary:", e));
+        });
+    }
         console.error("Erreur lors de la mise à jour de la communauté:", error);
         return res.status(500).json({
             success: false,
@@ -607,8 +655,7 @@ exports.getCommunitiesNotJoined = async (req, res) => {
                 { 
                     model: CommunityFile,
                     as: 'communityFiles',
-                    attributes: ['url', 'isPrincipale'],
-                    where: { isPrincipale: true }, 
+                    attributes: ['url', 'role'], // Fetch all files, not just principal
                     required: false 
                 }
             ],
@@ -714,9 +761,8 @@ exports.getUserCommunities = async (req, res) => {
                 {
                     model: CommunityFile,
                     as: 'communityFiles',
-                    attributes: ['url'],
-                    where: { isPrincipale: true }, // Pour obtenir l'image de profil/couverture
-                    required: false 
+                    attributes: ['url', 'role'],
+                    required: false
                 }
             ],
             attributes: [
@@ -732,11 +778,14 @@ exports.getUserCommunities = async (req, res) => {
                 ? community.communityFiles[0]
                 : { url: null };
 
+            const profileImage = community.communityFiles.find(f => f.role === 'avatar') || file;
+            const bannerImage = community.communityFiles.find(f => f.role === 'banner');
             return {
                 id: community.id,
                 name: community.name,
                 totalMembers: community.totalMembers,
-                profileImage: file.url, // Utilisation de l'URL du fichier principal
+                profileImage: profileImage.url, // Utilisation de l'URL du fichier principal
+                bannerImage: bannerImage ? bannerImage.url : null
             };
         });
 
@@ -752,5 +801,75 @@ exports.getUserCommunities = async (req, res) => {
             message: "Échec de la récupération des communautés dont l'utilisateur est membre.",
             error: error.message
         });
+    }
+};
+/**
+ * @description Récupérer toutes les publications publiques d'une communauté donnée.
+ * @route GET /api/communities/:id/posts/public?page=1&limit=10
+ * @access Public/Private (Requiert checkPostAccess pour vérifier l'existence de la communauté)
+ */
+exports.getPublicPostByCommunity = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const offset = (page - 1) * limit;
+        const currentUserId = req.user ? req.user.userId : null;
+        
+        const communityId = req.params.id; 
+
+        let whereCondition = { 
+            communityId: communityId,
+            isDeleted: false,
+            status: 'approved', 
+            isVisibleOutsideCommunity: true 
+        };
+
+        const { count, rows: posts } = await Post.findAndCountAll({
+            where: whereCondition,
+            limit: limit,
+            offset: offset,
+            order: [['createdAt', 'DESC']], 
+            
+            include: [
+                { model: PostFile, as: 'postFiles', attributes: ['url', 'type'] },
+                { model: User, as: 'user', attributes: ['id', 'firstName', 'lastName', 'profileImage', 'isVerified'] },
+                { model: Community, as: 'community', attributes: ['id', 'name'] }, 
+                { model: PostCategory, as: 'category', attributes: ['id', 'name', 'imageUrl'], required: false }
+            ],
+            
+            attributes: {
+                include: [
+                    [sequelize.literal(`(SELECT COUNT(*) FROM post_likes WHERE post_likes.post_id = Post.id)`), 'likesCount'],
+                    [sequelize.literal(`(SELECT COUNT(*) FROM comments WHERE comments.post_id = Post.id)`), 'commentsCount'],
+                    [sequelize.literal(`(SELECT COUNT(*) FROM post_shares WHERE post_shares.post_id = Post.id)`), 'sharesCount'],
+                    [sequelize.literal(`(SELECT COUNT(*) FROM post_likes AS IsLiked WHERE IsLiked.post_id = Post.id AND IsLiked.user_id = '${currentUserId || 0}')`), 'isLikedCount'],
+                    [sequelize.literal(`(SELECT COUNT(*) FROM favorite_posts AS FavoritePost WHERE FavoritePost.post_id = Post.id AND FavoritePost.user_id = '${currentUserId || 0}')`), 'isSavedCount']
+                ]
+            },
+        });
+
+        const formattedPosts = posts.map(post => {
+            const rawPost = post.get({ plain: true });
+            return {
+                ...rawPost,
+                isLiked: rawPost.isLikedCount > 0, 
+                isSaved: rawPost.isSavedCount > 0,
+                isLikedCount: undefined,
+                isSavedCount: undefined
+            };
+        });
+
+        res.status(200).json({
+            success: true,
+            communityId: communityId,
+            totalPosts: count,
+            totalPages: Math.ceil(count / limit),
+            currentPage: page,
+            posts: formattedPosts
+        });
+
+    } catch (error) {
+        console.error('Error fetching public community posts:', error);
+        res.status(500).json({ success: false, message: "Échec de la récupération des publications publiques.", error: error.message });
     }
 };

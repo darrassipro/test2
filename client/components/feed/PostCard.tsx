@@ -1,5 +1,5 @@
 import { View, Text, Image, TouchableOpacity, Pressable, Animated, Dimensions, ActivityIndicator } from "react-native";
-import { MessageCircleIcon, Bookmark, UserRoundPlus, MapPin, Calendar } from "lucide-react-native";
+import { MessageCircleIcon, Bookmark, UserRoundPlus, UserCheck, MapPin, Calendar } from "lucide-react-native";
 import icons from "@/constants/icons";
 import { useRef, useState, useEffect } from "react";
 import { useRouter } from "expo-router";
@@ -38,12 +38,18 @@ export default function PostCard({ post, onLike }: PostCardProps) {
   const [isLiked, setIsLiked] = useState<boolean>(!!post.isLiked);
   const [likes, setLikes] = useState<number>(post.likes ?? 0);
   const [joinCommunity, { isLoading: isJoining }] = useJoinCommunityMutation();
+  const [isMemberLocal, setIsMemberLocal] = useState<boolean>(post.isMember ?? false);
 
   // Sync with props when they change (from API updates)
   useEffect(() => {
     setIsLiked(!!post.isLiked);
     setLikes(post.likes ?? 0);
   }, [post.isLiked, post.likes]);
+
+  // keep local membership state in sync with prop
+  useEffect(() => {
+    setIsMemberLocal(post.isMember ?? false);
+  }, [post.isMember]);
   
   const toggleLike = (postId: string | number) => {
     setIsLiked(prev => !prev);
@@ -109,6 +115,8 @@ export default function PostCard({ post, onLike }: PostCardProps) {
         position: 'top',
         visibilityTime: 3000,
       });
+      // update local UI to show joined state
+      setIsMemberLocal(true);
     } catch (err: any) {
       Toast.show({
         type: 'error',
@@ -175,22 +183,29 @@ export default function PostCard({ post, onLike }: PostCardProps) {
           </View>
         </View>
 
-        {/* Join button for public posts when user is not a member */}
-        {isPublicPost && !isMemberOfCommunity && post.community?.id && (
-          <TouchableOpacity 
-            className="px-4 py-1.5 rounded-full flex-row items-center gap-1 bg-pink-50 border border-pink-200"
-            onPress={handleJoinCommunity}
-            disabled={isJoining}
-          >
-            {isJoining ? (
-              <ActivityIndicator size="small" color="#E72858" />
-            ) : (
-              <>
-                <UserRoundPlus size={14} color="#E72858" />
-                <Text className="text-[#E72858] text-xs font-semibold">Join</Text>
-              </>
-            )}
-          </TouchableOpacity>
+        {/* Join button for public posts when user is not a member; show Joined state when member */}
+        {isPublicPost && post.community?.id && (
+          isMemberLocal ? (
+            <View className="px-4 py-1.5 rounded-full flex-row items-center gap-1 bg-green-50 border border-green-200">
+              <UserCheck size={14} color="#10B981" />
+              <Text className="text-[#059669] text-xs font-semibold">Joined</Text>
+            </View>
+          ) : (
+            <TouchableOpacity 
+              className="px-4 py-1.5 rounded-full flex-row items-center gap-1 bg-pink-50 border border-pink-200"
+              onPress={handleJoinCommunity}
+              disabled={isJoining}
+            >
+              {isJoining ? (
+                <ActivityIndicator size="small" color="#E72858" />
+              ) : (
+                <>
+                  <UserRoundPlus size={14} color="#E72858" />
+                  <Text className="text-[#E72858] text-xs font-semibold">Join</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )
         )}
       </View>
 

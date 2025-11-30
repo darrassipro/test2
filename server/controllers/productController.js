@@ -1,7 +1,8 @@
 const { Op } = require('sequelize');
-const { Community, Product, ProductImage, ProductFile, ProductCategory, User , Rating} = require('../models');
+const { Community, Product, ProductImage, ProductFile, ProductCategory, User , Rating, CommunityMembership} = require('../models');
 const sequelize = Product.sequelize; 
-const { deleteMultipleFiles } = require('../config/cloudinary'); 
+const { deleteMultipleFiles } = require('../config/cloudinary');
+const { getUserRole } = require("../middleware/checkAdminRole"); 
 
 /**
  * UTILS INTERNES : Options d'inclusion pour récupérer le produit complet
@@ -15,7 +16,8 @@ const getProductIncludeOptions = () => ({
         },
         { 
             model: ProductFile, 
-            as: 'productFiles', 
+            as: 'productFiles',
+            required: false, 
             attributes: ['id', 'url', 'cloudinaryId', 'title', 'isVideo', 'time'] 
         },
         { 
@@ -26,21 +28,21 @@ const getProductIncludeOptions = () => ({
         { 
             model: ProductCategory, 
             as: 'category', 
-            attributes: ['id', 'name'] 
+            attributes: ['id', 'name', 'type'] 
         },
         { 
             model: User, 
             as: 'user', 
-            attributes: ['id', 'firstName', 'lastName'] 
+            attributes: ['id', 'firstName', 'lastName', 'profileImage'] 
         },
-    ]
+    ],
 });
  
 exports.createProduct = async (req, res) => {
     // communityId vient du paramètre ou du body, déjà vérifié par le middleware
     const communityId = req.params.communityId || req.body.communityId; 
     const { title, description, price, categoryId, type, isFree } = req.body;
-    const userId = req.user.userId; 
+    const currentUserId = req.user.userId; 
 
     if (!title || !price || !communityId || !type) {
         return res.status(400).json({ 
@@ -52,16 +54,52 @@ exports.createProduct = async (req, res) => {
     const t = await sequelize.transaction();
     let uploadedPublicIds = [];
 
+    const community = await Community.findByPk(communityId, { attributes: ['creatorUserId'] });
+    if (!community) {
+        await t.rollback();
+        return res.status(404).json({ success: false, message: "Communauté non trouvée." });
+    }
+    const isCreator = community.creatorUserId === currentUserId; 
+    
+            const isMemberRecord = await CommunityMembership.findOne({
+                where: { communityId: communityId, userId: currentUserId },
+                transaction: t
+            });
+    
+            const isMember = !!isMemberRecord; 
+            const userRole = await getUserRole(communityId, currentUserId); 
+            const isAdminOrMod = userRole && ['owner', 'admin'].includes(userRole); 
+    
+            if (!isCreator && !isMember && !isAdminOrMod) {
+                await t.rollback();
+                return res.status(403).json({
+                    success: false,
+                    message: "il faut etre membre ou créateur ou administrateur de la communauté pour créer un product"
+                });
+            }
+    
+            let productStatus = 'pending'; 
+            let publicationDate = null; 
+    
+            if (isCreator || isAdminOrMod) {
+                productStatus = 'approved';
+                publicationDate = new Date(); 
+            } else {
+                 productStatus = 'pending';
+            }
+
     try {
         const newProduct = await Product.create({
             communityId,
-            userId,
+            userId: currentUserId,
             title,
             description,
             price: parseFloat(price),
             categoryId,
             type, 
-            isFree: isFree === 'true' || isFree === true
+            isFree: isFree === 'true' || isFree === true,
+            status: productStatus,
+            publicationDate: publicationDate || new Date(),
         }, { transaction: t });
         
         const productId = newProduct.id;
@@ -105,7 +143,7 @@ exports.createProduct = async (req, res) => {
 
         await t.commit();
 
-        const productWithRelations = await Product.findByPk(productId, getProductIncludeOptions());
+        const productWithRelations = await Product.findByPk(productId, getProductIncludeOptions(currentUserId));
 
         return res.status(201).json({
             success: true,
@@ -132,46 +170,164 @@ exports.createProduct = async (req, res) => {
     }
 };
 
+exports.approvePendingProduct = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { productId } = req.params;
+        const product = await Product.findOne({
+            where: { id: productId, isDeleted: false, status: 'pending' },
+            transaction: t
+        });
+
+        if (!product) {
+            await t.rollback();
+            return res.status(404).json({ 
+                success: false, 
+                message: "Pending product not found or already approved/rejected" 
+            });
+        }
+        
+        await product.update({ 
+            status: 'approved',
+            publicationDate: new Date(), 
+        }, { transaction: t });
+        
+        await t.commit();
+
+        const updatedProduct = await Product.findByPk(productId,getProductIncludeOptions(currentUserId))
+
+        res.status(200).json({
+            success: true,
+            message: "Product approved and published successfully!",
+            product: updatedProduct
+        });
+
+    } catch (error) {
+        if (t && t.finished !== 'commit') { 
+            await t.rollback();
+        }
+        console.error('Error approving pending product:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: "Failed to approve and publish product", 
+            error: error.message 
+        });
+    }
+};
+
+exports.rejectPendingProduct = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { productId } = req.params;
+        
+        const [updatedRows] = await Product.update(
+            { status: 'rejected' }, 
+            { 
+                where: { id: productId, isDeleted: false, status: 'pending' },
+                transaction: t
+            }
+        );
+
+        if (updatedRows === 0) {
+            await t.rollback();
+            return res.status(404).json({ 
+                success: false, 
+                message: "Pending product not found or already approved/rejected" 
+            });
+        }
+        
+        await t.commit();
+
+        res.status(200).json({
+            success: true,
+            message: "Product rejected successfully. It will no longer be visible.",
+        });
+
+    } catch (error) {
+        if (t && t.finished !== 'commit') { 
+            await t.rollback();
+        }
+        console.error('Error rejecting pending product:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: "Failed to reject product", 
+            error: error.message 
+        });
+    }
+};
 
 exports.getProductsByCommunity = async (req, res) => {
     const { communityId } = req.params;
-    const { category, minPrice, maxPrice, type, isFree, sortBy, page = 1, limit = 10 } = req.query;
+    const { productType, priceType, sortBy, contentType, page = 1, limit = 10 } = req.query;
 
     const offset = (parseInt(page) - 1) * parseInt(limit);
     const where = { communityId };
     let order = [['createdAt', 'DESC']]; 
+    const isPaidContentFilterActive = (contentType === 'Paid Content');
+    const options = getProductIncludeOptions();
 
-    // Filtrage
-    if (category) where.categoryId = category;
-    if (type) where.type = type; // physique ou digital
-    if (isFree !== undefined) where.isFree = isFree === 'true';
-    if (minPrice || maxPrice) {
-        where.price = {};
-        if (minPrice) where.price[Op.gte] = parseFloat(minPrice);
-        if (maxPrice) where.price[Op.lte] = parseFloat(maxPrice);
+    if (priceType === 'paid' || isPaidContentFilterActive) {
+        where.isFree = false; 
+        where.price = { [Op.gt]: 0 };
+    } else if (priceType === 'free') {
+        where.isFree = true;
     }
+    if (isPaidContentFilterActive) {
+        const fileInclude = options.include.find(inc => inc.as === 'productFiles');
+        
+        if (fileInclude) {
+            fileInclude.required = true; 
+            fileInclude.where = { isVideo: true };
+        }
+    }
+    
+    if (productType && productType !== 'All Products') {
+        where.type = productType; 
+    }
+    
+    if (contentType && contentType !== 'Paid Content') {
+        const categoryInclude = options.include.find(inc => inc.as === 'category');
 
-    // Tri
+    if (categoryInclude) {
+        categoryInclude.where = { name: contentType };
+        categoryInclude.required = true;
+    }
+    }
+    
     switch (sortBy) {
-        case 'price_asc': order = [['price', 'ASC']]; break;
-        case 'price_desc': order = [['price', 'DESC']]; break;
-        case 'rating': order = [['rating', 'DESC']]; break;
-        case 'commands': order = [['totalCommands', 'DESC']]; break;
-        // date_desc par défaut
-    }
+        case 'new': 
+        case 'New Products': 
+            order = [['createdAt', 'DESC']]; 
+            break;
+            
+        case 'trending': 
+        case 'Trending':
+            order = [['totalCommands', 'DESC'], ['createdAt', 'DESC']]; 
+            break;
+            
+        default: 
+            order = [['createdAt', 'DESC']]; 
+            break; 
+    } 
 
     try {
         const result = await Product.findAndCountAll({
             where,
-            ...getProductIncludeOptions(),
+            ...options, 
             limit: parseInt(limit),
             offset,
-            order
+            order,
+            subQuery: false ,
+            distinct: true,
+        });
+        
+        const products = result.rows.map(product => {
+            return product.get({ plain: true });
         });
 
         return res.status(200).json({
             success: true,
-            products: result.rows,
+            products: products,
             paginationInfos: {
                 totalItems: result.count,
                 totalPages: Math.ceil(result.count / limit),
@@ -184,7 +340,7 @@ exports.getProductsByCommunity = async (req, res) => {
         console.error("Erreur lors de la récupération des produits de la communauté:", error);
         return res.status(500).json({
             success: false,
-            message: "Échec de la récupération des produits.",
+            message: "Échec: La connexion interne a échoué. Délai d attente de la base de données dépassé.",
             error: error.message
         });
     }
@@ -218,8 +374,7 @@ exports.getProductById = async (req, res) => {
     }
 };
 
-
- exports.updateProduct = async (req, res) => {
+exports.updateProduct = async (req, res) => {
     const { id } = req.params;
     const { title, description, price, categoryId, type, isFree, imagesToDelete, filesToDelete } = req.body;
     
@@ -530,6 +685,92 @@ exports.searchProducts = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: "Échec de la recherche des produits.",
+            error: error.message
+        });
+    }
+};
+
+// Get My Products
+exports.getMyProducts = async (req, res) => {
+    const currentUserId = req.user.userId; 
+    const { page = 1, limit = 10 } = req.query;
+
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
+    try {
+        const result = await Product.findAndCountAll({
+            where: { userId: currentUserId }, 
+            ...getProductIncludeOptions(),
+            limit: parseInt(limit),
+            offset,
+            order: [['createdAt', 'DESC']],
+            distinct: true,
+        });
+        
+        return res.status(200).json({
+            success: true,
+            products: result.rows,
+            paginationInfos: {
+                totalItems: result.count,
+                totalPages: Math.ceil(result.count / limit),
+                currentPage: parseInt(page),
+                pageSize: parseInt(limit)
+            }
+        });
+
+    } catch (error) {
+        console.error("Erreur lors de la récupération des produits de l'utilisateur:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Échec de la récupération des produits de l'utilisateur.",
+            error: error.message
+        });
+    }
+};
+
+// Get My Products By Category
+exports.getMyProductsByCategory = async (req, res) => {
+    const { categoryId } = req.params;
+    const currentUserId = req.user.userId; 
+    const { page = 1, limit = 10 } = req.query;
+
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
+    const options = getProductIncludeOptions();
+    const categoryInclude = options.include.find(inc => inc.as === 'category');
+
+    if (categoryInclude) {
+        categoryInclude.where = { id: categoryId };
+        categoryInclude.required = true;
+    }
+    
+    try {
+        const result = await Product.findAndCountAll({
+            where: { userId: currentUserId }, 
+            ...options,
+            limit: parseInt(limit),
+            offset,
+            order: [['createdAt', 'DESC']],
+            distinct: true, 
+            subQuery: false 
+        });
+        
+        return res.status(200).json({
+            success: true,
+            products: result.rows,
+            paginationInfos: {
+                totalItems: result.count,
+                totalPages: Math.ceil(result.count / limit),
+                currentPage: parseInt(page),
+                pageSize: parseInt(limit)
+            }
+        });
+
+    } catch (error) {
+        console.error("Erreur lors de la récupération des produits de l'utilisateur par catégorie:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Échec de la récupération des produits de l'utilisateur par catégorie.",
             error: error.message
         });
     }

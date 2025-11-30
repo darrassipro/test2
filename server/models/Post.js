@@ -92,7 +92,7 @@ const Post = sequelize.define(
          type: DataTypes.ENUM('pending', 'approved', 'rejected'),
          defaultValue: 'approved', 
          allowNull: false,
-      },
+        },
         isDeleted: {
             type: DataTypes.BOOLEAN,
             defaultValue: false,

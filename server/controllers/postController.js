@@ -23,9 +23,26 @@ exports.createPost = async (req, res) => {
             isBoosted,
             visitedTraceId // <-- NOUVEAU
         } = req.body;
-        const uploadedFiles = req.files || [];
-        const userId = req.user.userId;
+        const { images, videos, audios, virtualTours } = req.files;
+        const uploadedFiles = [];
+        if (images && images.length > 0) {
+    uploadedFiles.push(...images);
+}
 
+if (videos && videos.length > 0) {
+    uploadedFiles.push(...videos);
+}
+
+if (audios && audios.length > 0) {
+    uploadedFiles.push(...audios);
+} 
+if (virtualTours && virtualTours.length > 0) {
+    uploadedFiles.push(...virtualTours);
+}
+if (uploadedFiles.length > 0) {
+    console.log("Uploaded File Example Properties:", uploadedFiles[0]);
+}
+        const userId = req.user.userId;
         // 1. Vérifications de la Communauté
         if (!communityId) {
             await t.rollback();
@@ -56,13 +73,13 @@ exports.createPost = async (req, res) => {
 
         const isMember = !!isMemberRecord; 
         const userRole = await getUserRole(communityId, userId); 
-        const isAdminOrMod = userRole && ['owner', 'admin', 'moderator'].includes(userRole); 
+        const isAdminOrMod = userRole && ['owner', 'admin'].includes(userRole); 
 
         if (!isCreator && !isMember && !isAdminOrMod) {
             await t.rollback();
             return res.status(403).json({
                 success: false,
-                message: "il faut etre membre ou créateur ou administrateur/modérateur de la communauté pour créer un post"
+                message: "il faut etre membre ou créateur ou administrateur de la communauté pour créer un post"
             });
         }
 
@@ -149,21 +166,15 @@ exports.createPost = async (req, res) => {
 
 
         // 5. Gestion des fichiers
-        if (uploadedFiles.length > 0) {
-            const postFiles = uploadedFiles.map(file => {
-                const url = file.path;
-                const cloudinaryPublicId = file.filename;
-                const fileType = file.mimetype.startsWith('video') ? 'video' : 'image';
-
-                return {
-                    postId: newPost.id,
-                    url: url,
-                    cloudinaryPublicId: cloudinaryPublicId,
-                    type: fileType
-                };
-            });
-
-            await PostFile.bulkCreate(postFiles, { transaction: t });
+        if (uploadedFiles && uploadedFiles.length > 0) {
+            const filesToCreate = uploadedFiles.map((file, index) => ({
+                postId: newPost.id,
+                url: file.path || file.secure_url,
+                cloudinaryId: file.filename || file.public_id,
+                type: file.mimetype,
+                //isPrincipale: index === 0 
+            }));
+            await PostFile.bulkCreate(filesToCreate, { transaction: t });
         }
 
         // 6. Finalisation
@@ -1239,6 +1250,78 @@ exports.getPostsByRoute = async (req, res) => {
         res.status(500).json({ 
             success: false,
             message: "Failed to fetch posts by route",
+            error: error.message 
+        });
+    }
+};
+
+exports.getUserPostsGroupedByCommunity = async (req, res) => {
+    const targetUserId = req.user.userId; 
+    const whereCondition = {
+        userId: targetUserId,
+        isDeleted: false,
+        status: { [Op.in]: ['approved', 'pending'] } 
+    };
+    
+    try {
+        // 1. Récupérer TOUS les posts de l'utilisateur avec leurs relations
+        const posts = await Post.findAll({
+            where: whereCondition,
+            order: [['createdAt', 'DESC']],
+            include: [
+                { model: PostFile, as: 'postFiles' },
+                { model: User, as: 'user', attributes: ['id', 'firstName', 'lastName', 'profileImage', 'isVerified'] },
+                { model: Community, as: 'community', attributes: ['id', 'name'] }, 
+                { model: PostCategory, as: 'category', attributes: ['id', 'name', 'imageUrl'], required: false }
+            ],
+            attributes: {
+                include: [
+                    [sequelize.literal(`(SELECT COUNT(*) FROM post_likes WHERE post_likes.post_id = Post.id)`), 'likesCount'],
+                    [sequelize.literal(`(SELECT COUNT(*) FROM comments WHERE comments.post_id = Post.id)`), 'commentsCount'],
+                    [sequelize.literal(`(SELECT COUNT(*) FROM post_shares WHERE post_shares.post_id = Post.id)`), 'sharesCount'],
+                ]
+            }
+        });
+
+        // 2. Formatage et regroupement par communauté
+        const groupedPosts = {};
+
+        posts.forEach(post => {
+            const rawPost = post.get({ plain: true });
+            
+            // Le post DOIT avoir une communauté pour être groupé
+            if (rawPost.community && rawPost.community.id) {
+                const communityId = rawPost.community.id;
+                
+                // Initialisation de l'objet de communauté si c'est la première fois
+                if (!groupedPosts[communityId]) {
+                    groupedPosts[communityId] = {
+                        community: rawPost.community,
+                        posts: [],
+                        count: 0
+                    };
+                }
+                
+                delete rawPost.community; // On enlève la communauté de l'objet post pour éviter la redondance
+                
+                groupedPosts[communityId].posts.push(rawPost);
+                groupedPosts[communityId].count++;
+            }
+        });
+        
+        const formattedCommunities = Object.values(groupedPosts);
+
+        res.status(200).json({
+            success: true,
+            totalPosts: posts.length,
+            communities: formattedCommunities 
+        });
+
+    } catch (error) {
+        console.error('Error fetching user posts grouped by community:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: "Échec de la récupération des publications de l'utilisateur groupées.", 
             error: error.message 
         });
     }

@@ -1,20 +1,32 @@
 const express = require('express');
 const router = express.Router();
-const communityController = require('../controllers/CommunityController');
+const communityController = require('../controllers/communityController');
 const { authenticateToken } = require('../middleware/authEnhanced');
+const multer = require('multer');
 const { checkCommunityMembership } = require('../middleware/checkCommunityMembership');
-const { uploadImage } = require('../config/cloudinary'); 
-
-const uploadCommunityFiles = uploadImage.array('files', 5); 
+const { communityFileStorage} = require('../config/cloudinary'); 
+const { checkPostAccess } = require('../middleware/smartPostAccess'); 
+const uploadCommunityFields = multer({ storage: communityFileStorage }).fields([
+    { name: 'images', maxCount: 10 },
+    { name: 'videos', maxCount: 5 },
+    { name: 'audios', maxCount: 5 },
+    { name: 'virtualTours', maxCount: 2 } 
+]);
 
 router.get('/not-joined', authenticateToken, communityController.getCommunitiesNotJoined);
 
 router.get('/user-joined', authenticateToken, communityController.getUserCommunities);
+router.route('/:id/posts/public')
+    .get(
+        authenticateToken,
+        checkPostAccess,    
+        communityController.getPublicPostByCommunity
+    );
 
 router.route('/')
     .post(
         authenticateToken, 
-        uploadCommunityFiles, 
+        uploadCommunityFields, 
         communityController.createCommunity
     )
     .get(authenticateToken, communityController.getAllCommunities); 
@@ -27,7 +39,7 @@ router.route('/:id')
     )
     .put(
         authenticateToken, 
-        uploadCommunityFiles, 
+        uploadCommunityFields, 
         communityController.updateCommunity
     )
     .delete(

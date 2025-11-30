@@ -3,6 +3,7 @@ const db = require("../config/db");
 
 const sequelize = db.getSequelize();
 
+
 const CommunityFile = sequelize.define(
 	"CommunityFile",
 	{
@@ -36,6 +37,11 @@ const CommunityFile = sequelize.define(
 		cloudinaryId: {
 			type: DataTypes.STRING,
 			allowNull: true,
+		},
+		role: {
+			type: DataTypes.STRING,
+			allowNull: false,
+			defaultValue: 'gallery', // 'avatar', 'banner', 'gallery', etc.
 		},
 	},
 	{

@@ -309,40 +309,40 @@ const uploadPoiFile = async (fileBuffer, fileType, folder = "go-fez") => {
     throw new Error(`Erreur upload fichier Cloudinary: ${error.message}`);
   }
 };
+// Configuration de Stockage Unique pour la Communauté (pour Images, Vidéos, Audio)
+const communityFileStorage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: (req, file) => {
+        let resourceType = 'auto'; // Laissez Cloudinary détecter le type
+        let folder = 'ajiw/community/other'; 
 
-// Fonction pour uploader plusieurs fichiers POI en une fois
-const uploadMultiplePoiFiles = async (files, fileType, folder = "go-fez/poi") => {
-  try {
-    let cloudinaryFolder = `${folder}/images`;
-    let resourceType = 'image';
-    
-    if (fileType === 'video') {
-      cloudinaryFolder = `${folder}/videos`;
-      resourceType = 'video';
-    } else if (fileType === 'virtualtour') {
-      cloudinaryFolder = `${folder}/virtual-tours`;
-      resourceType = 'video';
-    }
-    
-    console.log(`🔄 Upload de ${files.length} fichier(s) de type ${fileType}...`);
-    
-    const uploadPromises = files.map(file => 
-      uploadFromBuffer(file.buffer, cloudinaryFolder, { resource_type: resourceType })
-    );
-    
-    const results = await Promise.all(uploadPromises);
-    console.log(`✅ ${results.length} fichier(s) uploadé(s) avec succès`);
-    
-    // Retourner les résultats formatés pour POIFile
-    return results.map(result => ({
-      fileUrl: result.secure_url,
-      filePublicId: result.public_id
-    }));
-  } catch (error) {
-    console.error('❌ Erreur upload multiple fichiers POI:', error);
-    throw new Error(`Erreur upload multiple Cloudinary: ${error.message}`);
-  }
-};
+        if (file.mimetype.startsWith('image/')) {
+            folder = 'ajiw/community/images';
+            resourceType = 'image';
+        } else if (file.mimetype.startsWith('video/')) {
+            folder = 'ajiw/community/videos';
+            resourceType = 'video';
+        } else if (file.mimetype.startsWith('audio/')) {
+            folder = 'ajiw/community/audio';
+            resourceType = 'video'; // Cloudinary traite les audios comme vidéo
+        }
+
+        return {
+            folder: folder,
+            resource_type: resourceType,
+            // Vous pouvez ajouter des transformations spécifiques ici basées sur le resourceType
+            // Ex: transformation: (resourceType === 'image' ? [{ quality: 'auto:best' }] : [])
+        };
+    },
+});
+
+// Middleware Multer Final pour la Communauté (accepte tous les types sous le champ 'files')
+const uploadCommunityFiles = multer({ 
+    storage: communityFileStorage,
+    limits: { fileSize: 100 * 1024 * 1024 } // Augmentez la limite pour les vidéos/audio
+});
+
+   
 
 const productFileStorage = new CloudinaryStorage({
    cloudinary: cloudinary,
@@ -385,6 +385,7 @@ module.exports = {
   getTransformedUrl,
   uploadMultipleFiles,
   uploadPoiFile,
-  uploadMultiplePoiFiles,
+  uploadCommunityFiles,
+  communityFileStorage,
   uploadProduct
 };

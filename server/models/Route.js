@@ -35,6 +35,11 @@ const Route = sequelize.define(
 			defaultValue: false,
 			allowNull: false,
 		},
+		status: { 
+         type: DataTypes.ENUM('pending', 'approved', 'rejected'),
+         defaultValue: 'approved', 
+         allowNull: false,
+        },
 		publishDate: {
 			type: DataTypes.DATE,
 			allowNull: true,

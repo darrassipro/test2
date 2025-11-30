@@ -73,6 +73,15 @@ export const communityApi = createApi({
       }),
       providesTags: ['Community'],
     }),
+    getUserCommunities: builder.query({
+      // GET /api/communities/user-joined
+      query: (params) => ({
+        url: '/communities/user-joined',
+        method: 'GET',
+        params,
+      }),
+      providesTags: ['Community'],
+    }),
     getCommunityMembers: builder.query({
       // args: { id, page, limit }
       query: ({ id, page = 1, limit = 50 }) => ({
@@ -88,8 +97,43 @@ export const communityApi = createApi({
         method: 'POST'
       }),
       invalidatesTags: ['Community']
+    }),
+    updateCommunity: builder.mutation({
+      query: ({ id, ...data }) => {
+        const formData = new FormData();
+        if (data.name) formData.append('name', data.name);
+        if (data.description) formData.append('description', data.description);
+        if (data.country) formData.append('country', data.country);
+        if (data.socialLinks) formData.append('socialLinks', JSON.stringify(data.socialLinks));
+        if (data.bannerImage) {
+          const banner = typeof data.bannerImage === 'string' ? { uri: data.bannerImage, name: 'banner.jpg', type: 'image/jpeg' } : data.bannerImage;
+          formData.append('images', banner);
+          formData.append('roles', 'banner');
+        }
+        if (data.avatarImage) {
+          const avatar = typeof data.avatarImage === 'string' ? { uri: data.avatarImage, name: 'avatar.jpg', type: 'image/jpeg' } : data.avatarImage;
+          formData.append('images', avatar);
+          formData.append('roles', 'avatar');
+        }
+        if (data.files && Array.isArray(data.files)) {
+          data.files.forEach((f) => {
+            const file = typeof f === 'string' ? { uri: f, name: f.split('/').pop() || 'file.jpg', type: 'image/jpeg' } : f;
+            formData.append('images', file);
+            formData.append('roles', 'gallery');
+          });
+        }
+        return {
+          url: `/communities/${id}`,
+          method: 'PUT',
+          body: formData,
+          headers: {
+            'Content-Type': 'multipart/form-data',
+          },
+        };
+      },
+      invalidatesTags: ['Community'],
     })
   }),
 });
 
-export const { useCreateCommunityMutation, useGetAllCommunitiesQuery, useGetCommunitiesNotJoinedQuery, useGetCommunityByIdQuery, useGetCommunityMembersQuery, useJoinCommunityMutation } = communityApi;
+export const { useCreateCommunityMutation, useUpdateCommunityMutation, useGetAllCommunitiesQuery, useGetCommunitiesNotJoinedQuery, useGetCommunityByIdQuery, useGetUserCommunitiesQuery, useGetCommunityMembersQuery, useJoinCommunityMutation } = communityApi;

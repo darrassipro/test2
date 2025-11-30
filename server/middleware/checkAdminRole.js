@@ -4,7 +4,7 @@ const { Community, Admin, CommunityMembership } = require('../models/index');
  * Fonction utilitaire pour récupérer le rôle d'un utilisateur dans une communauté
  * @param {string} communityId ID de la communauté
  * @param {string} userId ID de l'utilisateur
- * @returns {Promise<string|null>} Le rôle ('owner', 'admin', 'moderator') ou null
+ * @returns {Promise<string|null>} Le rôle ('owner', 'admin') ou null
  */
 const getUserRole = async (communityId, userId) => {
     const adminEntry = await Admin.findOne({
@@ -24,16 +24,15 @@ const getUserRole = async (communityId, userId) => {
 
 /**
  * Middleware pour vérifier si l'utilisateur a un rôle d'administrateur spécifié ou supérieur
- * @param {string} requiredRole Le rôle minimum requis ('owner', 'admin', 'moderator')
+ * @param {string} requiredRole Le rôle minimum requis ('owner', 'admin')
  * @returns {Function} Middleware Express
  */
 const checkAdminRole = (requiredRole) => {
     
     // Définir la hiérarchie pour la vérification
     const roleHierarchy = {
-        'owner': 3,
-        'admin': 2,
-        'moderator': 1
+        'owner': 2,
+        'admin': 1,
     };
 
     return async (req, res, next) => {

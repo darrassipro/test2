@@ -16,6 +16,10 @@ const ProductCategory = sequelize.define(
 			type: DataTypes.STRING,
 			allowNull: false,
 		},
+		type: { 
+            type: DataTypes.ENUM('digital', 'physical'),
+            allowNull: false,
+        },
 	},
 	{
 		tableName: "product_categories",

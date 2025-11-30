@@ -5,12 +5,23 @@ const { authenticateToken } = require('../middleware/authEnhanced');
 const { checkPostAccess } = require('../middleware/smartPostAccess');
 const { uploadImage } = require('../config/cloudinary');
 const { checkAdminRole } = require('../middleware/checkAdminRole');
-
-const uploadPostFiles = uploadImage.array('files', 5); 
-
+const multer = require('multer');
+const { communityFileStorage} = require('../config/cloudinary');
+const uploadCommunityFields = multer({ storage: communityFileStorage }).fields([
+    { name: 'images', maxCount: 10 },
+    { name: 'videos', maxCount: 5 },
+    { name: 'audios', maxCount: 5 },
+    { name: 'virtualTours', maxCount: 2 } 
+]);
 
 // Create Post
-router.post('/', authenticateToken, uploadPostFiles, postController.createPost);
+router.post('/', authenticateToken, uploadCommunityFields, postController.createPost);
+
+router.get(
+    '/grouped',
+    authenticateToken, 
+    postController.getUserPostsGroupedByCommunity
+); 
 
 // Get Posts
 router.get('/', authenticateToken, checkPostAccess, postController.getUnifiedPosts);
@@ -19,7 +30,7 @@ router.get('/', authenticateToken, checkPostAccess, postController.getUnifiedPos
 router.get('/:postId',authenticateToken, postController.getPostById); 
 
 // Update Post
-router.put('/:postId', authenticateToken,uploadPostFiles, postController.updatePost);
+router.put('/:postId', authenticateToken,uploadCommunityFields, postController.updatePost);
 
 // Delete Post (Soft Delete)
 router.delete('/:postId', authenticateToken, postController.deletePost);
@@ -60,7 +71,7 @@ router.get('/routes/:routeId', authenticateToken, postController.getPostsByRoute
 router.put(
     '/:communityId/:postId/approve',
     authenticateToken,
-    checkAdminRole('moderator'), 
+    checkAdminRole('admin'), 
     postController.approvePendingPost
 );
 
@@ -68,8 +79,9 @@ router.put(
 router.put(
     '/:communityId/:postId/reject',
     authenticateToken,
-    checkAdminRole('moderator'), 
+    checkAdminRole('admin'), 
     postController.rejectPendingPost
 );
+
 
 module.exports = router;
