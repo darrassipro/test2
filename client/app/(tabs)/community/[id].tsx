@@ -320,9 +320,11 @@ export default function CommunityDetails() {
                   {community.name}
                 </Text>
 
-                <TouchableOpacity>
-                  <Edit size={18} color="#666" />
-                </TouchableOpacity>
+                {userRole === 'owner' && (
+                  <TouchableOpacity onPress={() => router.push(`/update-community?id=${communityId}`)}>
+                    <Edit size={18} color="#666" />
+                  </TouchableOpacity>
+                )}
               </View>
               {/* Description */}
               <Text style={{

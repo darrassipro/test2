@@ -481,7 +481,7 @@ exports.getCommunity = async (req, res) => {
  */
 exports.updateCommunity = async (req, res) => {
     const communityId = req.params.id;
-    const { name, description, isPremium, price, filesToDelete, principalFileId } = req.body; 
+    const { name, description, country, facebookLink, instagramLink, whatsappLink, isPremium, price, filesToDelete, principalFileId } = req.body; 
     const { images, videos, audios, virtualTours } = req.files || {};
     const userId = req.user.userId;
     const allUploadedFiles = [];
@@ -509,6 +509,10 @@ if (virtualTours) allUploadedFiles.push(...virtualTours);
         let updateData = {};
         if (name && name.length >= 3) updateData.name = name;
         if (description !== undefined) updateData.description = description;
+        if (country !== undefined) updateData.country = country;
+        if (facebookLink !== undefined) updateData.facebookLink = facebookLink;
+        if (instagramLink !== undefined) updateData.instagramLink = instagramLink;
+        if (whatsappLink !== undefined) updateData.whatsappLink = whatsappLink;
 
         if (isPremium !== undefined) {
             const finalIsPremium = (isPremium === 'true');
