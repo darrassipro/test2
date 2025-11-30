@@ -253,8 +253,8 @@ exports.getAllCommunities = async (req, res) => {
                 }
             ],
             attributes: [
-                'id', 'name', 'description', 'isVerified', 'totalMembers', 
-                'totalPosts', 'totalProducts', 'isPremium', 'price'
+                'id', 'name', 'description', 'country', 'facebookLink', 'instagramLink', 'whatsappLink',
+                'isVerified', 'totalMembers', 'totalPosts', 'totalProducts', 'isPremium', 'price'
             ]
         });
 
@@ -309,8 +309,8 @@ exports.getCommunity = async (req, res) => {
           });
         const communityInformations = await Community.findByPk(communityId, {
             attributes: [
-                'id', 'name', 'description', 'isVerified', 'totalMembers', 
-                'totalPosts', 'totalProducts', 'isPremium', 'price', 'createdAt'
+                'id', 'name', 'description', 'country', 'facebookLink', 'instagramLink', 'whatsappLink',
+                'isVerified', 'totalMembers', 'totalPosts', 'totalProducts', 'isPremium', 'price', 'createdAt'
             ],
             include: [
                 { 
@@ -705,8 +705,8 @@ exports.getCommunitiesNotJoined = async (req, res) => {
                 }
             ],
             attributes: [
-                'id', 'name', 'description', 'isVerified', 'totalMembers', 
-                'totalPosts', 'totalProducts', 'isPremium', 'price'
+                'id', 'name', 'description', 'country', 'facebookLink', 'instagramLink', 'whatsappLink',
+                'isVerified', 'totalMembers', 'totalPosts', 'totalProducts', 'isPremium', 'price'
             ]
         });
 
