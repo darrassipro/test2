@@ -4,7 +4,9 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Shield } from 'lucide-react';
+import { Shield, Loader2 } from 'lucide-react';
+import { adminService } from '@/lib/services/adminService';
+import { handleApiError } from '@/lib/api';
 
 interface AdminAuthProps {
   children: React.ReactNode;
@@ -13,6 +15,7 @@ interface AdminAuthProps {
 export function AdminAuth({ children }: AdminAuthProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [credentials, setCredentials] = useState({
     username: '',
     password: '',
@@ -20,11 +23,26 @@ export function AdminAuth({ children }: AdminAuthProps) {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    // Check if user is already authenticated (e.g., from localStorage or session)
-    const adminToken = localStorage.getItem('adminToken');
-    if (adminToken) {
-      // In a real app, you would validate this token with your backend
-      setIsAuthenticated(true);
+    // Check if user is already authenticated
+    const adminToken = localStorage.getItem('authToken');
+    const adminUser = localStorage.getItem('adminUser');
+    
+    if (adminToken && adminUser) {
+      try {
+        const user = JSON.parse(adminUser);
+        // Verify the user has admin privileges
+        if (user.role === 'admin' || user.role === 'super_admin' || user.isAdmin) {
+          setIsAuthenticated(true);
+        } else {
+          // Clear invalid admin session
+          localStorage.removeItem('authToken');
+          localStorage.removeItem('adminUser');
+        }
+      } catch (error) {
+        // Clear corrupted session data
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('adminUser');
+      }
     }
     setIsLoading(false);
   }, []);
@@ -32,20 +50,42 @@ export function AdminAuth({ children }: AdminAuthProps) {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsSubmitting(true);
 
-    // Simple demo authentication - replace with real authentication
-    if (credentials.username === 'admin' && credentials.password === 'admin123') {
-      localStorage.setItem('adminToken', 'demo-admin-token');
-      setIsAuthenticated(true);
-    } else {
-      setError('Invalid credentials. Use admin/admin123 for demo.');
+    try {
+      const response = await adminService.login(credentials.username, credentials.password);
+      
+      if (response.success && response.data) {
+        const { user, token } = response.data;
+        
+        // Store authentication data
+        localStorage.setItem('authToken', token);
+        localStorage.setItem('adminUser', JSON.stringify(user));
+        
+        setIsAuthenticated(true);
+      } else {
+        setError(response.message || 'Login failed');
+      }
+    } catch (error: any) {
+      setError(handleApiError(error));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('adminToken');
-    setIsAuthenticated(false);
-    setCredentials({ username: '', password: '' });
+  const handleLogout = async () => {
+    try {
+      await adminService.logout();
+    } catch (error) {
+      // Ignore logout errors
+      console.error('Logout error:', error);
+    } finally {
+      // Always clear local storage
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('adminUser');
+      setIsAuthenticated(false);
+      setCredentials({ username: '', password: '' });
+    }
   };
 
   if (isLoading) {
@@ -105,14 +145,20 @@ export function AdminAuth({ children }: AdminAuthProps) {
                   {error}
                 </div>
               )}
-              <Button type="submit" className="w-full">
-                Sign In
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Signing In...
+                  </>
+                ) : (
+                  'Sign In'
+                )}
               </Button>
             </form>
             <div className="mt-4 p-3 bg-blue-50 rounded text-sm text-blue-700">
-              <strong>Demo Credentials:</strong><br />
-              Username: admin<br />
-              Password: admin123
+              <strong>Note:</strong><br />
+              Use your admin credentials to access the admin panel.
             </div>
           </CardContent>
         </Card>

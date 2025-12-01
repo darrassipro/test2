@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -12,108 +12,102 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Flag, CheckCircle, XCircle, Eye, AlertTriangle, Clock } from 'lucide-react';
-
-// Mock data for reported content
-const reportedContent = [
-  {
-    id: 1,
-    type: 'Post',
-    title: 'Inappropriate content example',
-    author: 'User123',
-    community: 'Tech Enthusiasts',
-    reportedBy: 'ModeratorUser',
-    reason: 'Spam',
-    status: 'Pending',
-    reportDate: '2024-01-15',
-    severity: 'Medium',
-  },
-  {
-    id: 2,
-    type: 'Comment',
-    title: 'Offensive language in comment',
-    author: 'BadUser456',
-    community: 'Photography Club',
-    reportedBy: 'CommunityMember',
-    reason: 'Harassment',
-    status: 'Under Review',
-    reportDate: '2024-01-14',
-    severity: 'High',
-  },
-  {
-    id: 3,
-    type: 'Post',
-    title: 'Misleading information post',
-    author: 'FakeNews789',
-    community: 'Gaming Community',
-    reportedBy: 'TrustedUser',
-    reason: 'Misinformation',
-    status: 'Resolved',
-    reportDate: '2024-01-13',
-    severity: 'High',
-  },
-  {
-    id: 4,
-    type: 'User Profile',
-    title: 'Fake profile with stolen images',
-    author: 'FakeProfile',
-    community: 'N/A',
-    reportedBy: 'VerifiedUser',
-    reason: 'Identity Theft',
-    status: 'Pending',
-    reportDate: '2024-01-12',
-    severity: 'Critical',
-  },
-  {
-    id: 5,
-    type: 'Comment',
-    title: 'Promotional spam comment',
-    author: 'SpamBot',
-    community: 'Cooking Enthusiasts',
-    reportedBy: 'ActiveMember',
-    reason: 'Spam',
-    status: 'Resolved',
-    reportDate: '2024-01-11',
-    severity: 'Low',
-  },
-];
-
-const moderationStats = [
-  {
-    title: 'Pending Reports',
-    value: reportedContent.filter(r => r.status === 'Pending').length,
-    icon: Clock,
-    color: 'text-yellow-600',
-  },
-  {
-    title: 'Under Review',
-    value: reportedContent.filter(r => r.status === 'Under Review').length,
-    icon: Eye,
-    color: 'text-blue-600',
-  },
-  {
-    title: 'Resolved Today',
-    value: reportedContent.filter(r => r.status === 'Resolved').length,
-    icon: CheckCircle,
-    color: 'text-green-600',
-  },
-  {
-    title: 'Critical Reports',
-    value: reportedContent.filter(r => r.severity === 'Critical').length,
-    icon: AlertTriangle,
-    color: 'text-red-600',
-  },
-];
+import { CheckCircle, XCircle, AlertTriangle, Ban, MessageSquare, Shield, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { adminService, Report } from '@/lib/services/adminService';
+import { handleApiError } from '@/lib/api';
 
 export default function ModerationPage() {
+  const [reports, setReports] = useState<Report[]>([]);
+  const [stats, setStats] = useState<any>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [isActionLoading, setIsActionLoading] = useState<number | null>(null);
+  const [error, setError] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('All');
   const [selectedSeverity, setSelectedSeverity] = useState('All');
+  const [selectedType, setSelectedType] = useState('All');
 
-  const filteredReports = reportedContent.filter(report => {
-    const matchesStatus = selectedStatus === 'All' || report.status === selectedStatus;
-    const matchesSeverity = selectedSeverity === 'All' || report.severity === selectedSeverity;
-    return matchesStatus && matchesSeverity;
-  });
+  useEffect(() => {
+    fetchReports();
+  }, [selectedStatus, selectedSeverity, selectedType]);
+
+  const fetchReports = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+      
+      const params: any = {};
+      if (selectedStatus !== 'All') params.status = selectedStatus;
+      if (selectedSeverity !== 'All') params.severity = selectedSeverity;
+      if (selectedType !== 'All') params.type = selectedType;
+
+      const response = await adminService.getReports(params);
+      
+      if (response.success && response.data) {
+        setReports(response.data.reports);
+        setStats(response.data.stats);
+      } else {
+        setError(response.message || 'Failed to fetch reports');
+      }
+    } catch (error: any) {
+      setError(handleApiError(error));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleReportAction = async (action: string, reportId: number, additionalData?: any) => {
+    try {
+      setIsActionLoading(reportId);
+      let response;
+
+      switch (action) {
+        case 'approve':
+          response = await adminService.approveReport(reportId);
+          break;
+        case 'reject':
+          const report = reports.find(r => r.id === reportId);
+          if (report) {
+            response = await adminService.rejectReport(
+              reportId, 
+              report.contentId, 
+              report.type, 
+              additionalData?.reason
+            );
+          }
+          break;
+        case 'ban_user':
+          response = await adminService.banUserFromReport(
+            reportId, 
+            additionalData?.userId, 
+            additionalData?.reason
+          );
+          break;
+        case 'warn_user':
+          response = await adminService.warnUser(
+            reportId, 
+            additionalData?.userId, 
+            additionalData?.message
+          );
+          break;
+        case 'dismiss':
+          response = await adminService.dismissReport(reportId);
+          break;
+        default:
+          throw new Error('Invalid action');
+      }
+
+      if (response.success) {
+        // Refresh the reports list
+        await fetchReports();
+      } else {
+        setError(response.message || 'Action failed');
+      }
+    } catch (error: any) {
+      setError(handleApiError(error));
+    } finally {
+      setIsActionLoading(null);
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -139,73 +133,111 @@ export default function ModerationPage() {
       case 'Medium':
         return <Badge className="bg-yellow-100 text-yellow-800">Medium</Badge>;
       case 'Low':
-        return <Badge variant="outline">Low</Badge>;
+        return <Badge className="bg-gray-100 text-gray-800">Low</Badge>;
       default:
         return <Badge variant="secondary">{severity}</Badge>;
     }
   };
 
-  const handleApprove = (id: number) => {
-    console.log('Approving report:', id);
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'Post':
+        return <Shield className="h-4 w-4" />;
+      case 'Comment':
+        return <MessageSquare className="h-4 w-4" />;
+      case 'User Profile':
+        return <Ban className="h-4 w-4" />;
+      default:
+        return <AlertTriangle className="h-4 w-4" />;
+    }
   };
 
-  const handleReject = (id: number) => {
-    console.log('Rejecting report:', id);
-  };
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Loading moderation reports...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && reports.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-4" />
+          <p className="text-red-600 mb-4">{error}</p>
+          <Button onClick={fetchReports}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Content Moderation</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Review and manage reported content and user violations
-        </p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Moderation</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Review and manage reported content and user violations
+          </p>
+        </div>
+        <Button onClick={fetchReports} disabled={isLoading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
-      {/* Moderation Stats */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <p className="text-red-600">{error}</p>
+        </div>
+      )}
+
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {moderationStats.map((stat) => (
-          <Card key={stat.title}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                {stat.title}
-              </CardTitle>
-              <stat.icon className={`h-4 w-4 ${stat.color}`} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-            </CardContent>
-          </Card>
-        ))}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pending Reports</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.pending || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Under Review</CardTitle>
+            <Shield className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.underReview || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Critical Reports</CardTitle>
+            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.critical || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Resolved</CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.resolved || 0}</div>
+          </CardContent>
+        </Card>
       </div>
-
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Quick Actions</CardTitle>
-          <CardDescription>Common moderation tasks</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Button variant="outline" className="justify-start">
-              <Flag className="h-4 w-4 mr-2" />
-              Review Reports
-            </Button>
-            <Button variant="outline" className="justify-start">
-              <Eye className="h-4 w-4 mr-2" />
-              Audit Content
-            </Button>
-            <Button variant="outline" className="justify-start">
-              <AlertTriangle className="h-4 w-4 mr-2" />
-              Ban User
-            </Button>
-            <Button variant="outline" className="justify-start">
-              <CheckCircle className="h-4 w-4 mr-2" />
-              Bulk Actions
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Filters */}
       <Card>
@@ -236,16 +268,26 @@ export default function ModerationPage() {
               <option value="Medium">Medium</option>
               <option value="Low">Low</option>
             </select>
+            <select
+              value={selectedType}
+              onChange={(e) => setSelectedType(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="All">All Types</option>
+              <option value="Post">Post</option>
+              <option value="Comment">Comment</option>
+              <option value="User Profile">User Profile</option>
+            </select>
           </div>
         </CardContent>
       </Card>
 
-      {/* Reported Content Table */}
+      {/* Reports Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Reported Content ({filteredReports.length})</CardTitle>
+          <CardTitle>Reports ({reports.length})</CardTitle>
           <CardDescription>
-            Review and take action on reported content and user violations.
+            Content and user reports requiring moderation review
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -264,12 +306,15 @@ export default function ModerationPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredReports.map((report) => (
+              {reports.map((report) => (
                 <TableRow key={report.id}>
                   <TableCell>
-                    <div className="max-w-xs">
-                      <div className="font-medium truncate">{report.title}</div>
-                      <div className="text-sm text-gray-500">{report.community}</div>
+                    <div className="flex items-center space-x-2">
+                      {getTypeIcon(report.type)}
+                      <div className="max-w-xs">
+                        <div className="font-medium truncate">{report.title}</div>
+                        <div className="text-sm text-gray-500">{report.community}</div>
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell>{report.type}</TableCell>
@@ -278,34 +323,49 @@ export default function ModerationPage() {
                   <TableCell>{report.reason}</TableCell>
                   <TableCell>{getSeverityBadge(report.severity)}</TableCell>
                   <TableCell>{getStatusBadge(report.status)}</TableCell>
-                  <TableCell>{report.reportDate}</TableCell>
+                  <TableCell>{new Date(report.reportDate).toLocaleDateString()}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end space-x-2">
                       <Button 
                         variant="ghost" 
                         size="icon"
-                        onClick={() => console.log('View content:', report.id)}
+                        onClick={() => handleReportAction('approve', report.id)}
+                        disabled={isActionLoading === report.id}
+                        title="Approve (content is not violating)"
                       >
-                        <Eye className="h-4 w-4" />
+                        {isActionLoading === report.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <CheckCircle className="h-4 w-4" />
+                        )}
                       </Button>
-                      {report.status !== 'Resolved' && (
-                        <>
-                          <Button 
-                            variant="ghost" 
-                            size="icon"
-                            onClick={() => handleApprove(report.id)}
-                          >
-                            <CheckCircle className="h-4 w-4 text-green-600" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon"
-                            onClick={() => handleReject(report.id)}
-                          >
-                            <XCircle className="h-4 w-4 text-red-600" />
-                          </Button>
-                        </>
-                      )}
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => handleReportAction('reject', report.id, { reason: 'Content violates guidelines' })}
+                        disabled={isActionLoading === report.id}
+                        title="Reject (take action on content)"
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => handleReportAction('ban_user', report.id, { userId: 1, reason: 'Policy violation' })}
+                        disabled={isActionLoading === report.id}
+                        title="Ban user"
+                      >
+                        <Ban className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => handleReportAction('warn_user', report.id, { userId: 1, message: 'Warning for policy violation' })}
+                        disabled={isActionLoading === report.id}
+                        title="Warn user"
+                      >
+                        <AlertTriangle className="h-4 w-4" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,106 +13,97 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Search, Eye, Edit, Trash2, Flag, Heart, MessageCircle, Share } from 'lucide-react';
-
-// Mock data
-const posts = [
-  {
-    id: 1,
-    title: 'Introduction to React Hooks',
-    content: 'A comprehensive guide to understanding and using React Hooks...',
-    author: 'John Doe',
-    community: 'Tech Enthusiasts',
-    status: 'Published',
-    visibility: 'Public',
-    createdDate: '2024-01-15',
-    likes: 45,
-    comments: 12,
-    shares: 8,
-    reports: 0,
-  },
-  {
-    id: 2,
-    title: 'Beautiful Sunset Photography',
-    content: 'Captured this amazing sunset yesterday...',
-    author: 'Jane Smith',
-    community: 'Photography Club',
-    status: 'Published',
-    visibility: 'Public',
-    createdDate: '2024-01-14',
-    likes: 123,
-    comments: 34,
-    shares: 15,
-    reports: 0,
-  },
-  {
-    id: 3,
-    title: 'Investment Strategy Discussion',
-    content: 'Let\'s discuss the best investment strategies for 2024...',
-    author: 'Bob Johnson',
-    community: 'Private Investors',
-    status: 'Published',
-    visibility: 'Private',
-    createdDate: '2024-01-13',
-    likes: 23,
-    comments: 7,
-    shares: 2,
-    reports: 0,
-  },
-  {
-    id: 4,
-    title: 'New Game Release Review',
-    content: 'Just played the latest AAA game release...',
-    author: 'Alice Brown',
-    community: 'Gaming Community',
-    status: 'Under Review',
-    visibility: 'Public',
-    createdDate: '2024-01-12',
-    likes: 67,
-    comments: 23,
-    shares: 11,
-    reports: 2,
-  },
-  {
-    id: 5,
-    title: 'Homemade Pizza Recipe',
-    content: 'Here\'s my secret recipe for the perfect homemade pizza...',
-    author: 'Charlie Wilson',
-    community: 'Cooking Enthusiasts',
-    status: 'Published',
-    visibility: 'Public',
-    createdDate: '2024-01-11',
-    likes: 89,
-    comments: 18,
-    shares: 25,
-    reports: 0,
-  },
-];
+import { Search, Edit, Trash2, Eye, EyeOff, CheckCircle, XCircle, TrendingUp, FileText, Heart, MessageCircle, Share, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { adminService, Post } from '@/lib/services/adminService';
+import { handleApiError } from '@/lib/api';
 
 export default function PostsPage() {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [stats, setStats] = useState<any>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [isActionLoading, setIsActionLoading] = useState<number | null>(null);
+  const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('All');
   const [selectedVisibility, setSelectedVisibility] = useState('All');
 
-  const filteredPosts = posts.filter(post => {
-    const matchesSearch = post.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         post.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         post.author.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = selectedStatus === 'All' || post.status === selectedStatus;
-    const matchesVisibility = selectedVisibility === 'All' || post.visibility === selectedVisibility;
-    return matchesSearch && matchesStatus && matchesVisibility;
-  });
+  useEffect(() => {
+    fetchPosts();
+  }, [searchTerm, selectedStatus, selectedVisibility]);
+
+  const fetchPosts = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+      
+      const params: any = {};
+      if (searchTerm) params.search = searchTerm;
+      if (selectedStatus !== 'All') params.status = selectedStatus;
+      if (selectedVisibility !== 'All') params.visibility = selectedVisibility;
+
+      const response = await adminService.getPosts(params);
+      
+      if (response.success && response.data) {
+        setPosts(response.data.posts);
+        setStats(response.data.stats);
+      } else {
+        setError(response.message || 'Failed to fetch posts');
+      }
+    } catch (error: any) {
+      setError(handleApiError(error));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePostAction = async (action: string, postId: number, additionalData?: any) => {
+    try {
+      setIsActionLoading(postId);
+      let response;
+
+      switch (action) {
+        case 'approve':
+          response = await adminService.approvePost(postId);
+          break;
+        case 'reject':
+          response = await adminService.rejectPost(postId, additionalData?.reason);
+          break;
+        case 'hide':
+          response = await adminService.hidePost(postId);
+          break;
+        case 'boost':
+          response = await adminService.boostPost(postId);
+          break;
+        case 'delete':
+          response = await adminService.deletePost(postId);
+          break;
+        default:
+          throw new Error('Invalid action');
+      }
+
+      if (response.success) {
+        // Refresh the posts list
+        await fetchPosts();
+      } else {
+        setError(response.message || 'Action failed');
+      }
+    } catch (error: any) {
+      setError(handleApiError(error));
+    } finally {
+      setIsActionLoading(null);
+    }
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'Published':
         return <Badge className="bg-green-100 text-green-800">Published</Badge>;
-      case 'Under Review':
-        return <Badge className="bg-yellow-100 text-yellow-800">Under Review</Badge>;
-      case 'Rejected':
-        return <Badge variant="destructive">Rejected</Badge>;
       case 'Draft':
         return <Badge variant="secondary">Draft</Badge>;
+      case 'Inactive':
+        return <Badge variant="secondary">Inactive</Badge>;
+      case 'Rejected':
+        return <Badge variant="destructive">Rejected</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -121,13 +112,39 @@ export default function PostsPage() {
   const getVisibilityBadge = (visibility: string) => {
     switch (visibility) {
       case 'Public':
-        return <Badge variant="outline">Public</Badge>;
+        return <Badge className="bg-blue-100 text-blue-800">Public</Badge>;
       case 'Private':
-        return <Badge className="bg-blue-100 text-blue-800">Private</Badge>;
+        return <Badge className="bg-purple-100 text-purple-800">Private</Badge>;
       default:
         return <Badge variant="secondary">{visibility}</Badge>;
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Loading posts...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && posts.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-4" />
+          <p className="text-red-600 mb-4">{error}</p>
+          <Button onClick={fetchPosts}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -138,50 +155,54 @@ export default function PostsPage() {
             Manage and moderate all platform posts
           </p>
         </div>
+        <Button onClick={fetchPosts} disabled={isLoading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <p className="text-red-600">{error}</p>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Posts</CardTitle>
-            <Eye className="h-4 w-4 text-muted-foreground" />
+            <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{posts.length}</div>
+            <div className="text-2xl font-bold">{stats.total || 0}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Published</CardTitle>
-            <Eye className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Published Posts</CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {posts.filter(p => p.status === 'Published').length}
-            </div>
+            <div className="text-2xl font-bold">{stats.published || 0}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Under Review</CardTitle>
-            <Flag className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Total Likes</CardTitle>
+            <Heart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {posts.filter(p => p.status === 'Under Review').length}
-            </div>
+            <div className="text-2xl font-bold">{stats.totalLikes || 0}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Reported Posts</CardTitle>
-            <Flag className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Total Comments</CardTitle>
+            <MessageCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {posts.filter(p => p.reports > 0).length}
-            </div>
+            <div className="text-2xl font-bold">{stats.totalComments || 0}</div>
           </CardContent>
         </Card>
       </div>
@@ -209,9 +230,9 @@ export default function PostsPage() {
             >
               <option value="All">All Status</option>
               <option value="Published">Published</option>
-              <option value="Under Review">Under Review</option>
-              <option value="Rejected">Rejected</option>
               <option value="Draft">Draft</option>
+              <option value="Inactive">Inactive</option>
+              <option value="Rejected">Rejected</option>
             </select>
             <select
               value={selectedVisibility}
@@ -229,7 +250,7 @@ export default function PostsPage() {
       {/* Posts Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Posts ({filteredPosts.length})</CardTitle>
+          <CardTitle>Posts ({posts.length})</CardTitle>
           <CardDescription>
             A list of all posts on your platform including their details and engagement metrics.
           </CardDescription>
@@ -244,18 +265,19 @@ export default function PostsPage() {
                 <TableHead>Status</TableHead>
                 <TableHead>Visibility</TableHead>
                 <TableHead>Engagement</TableHead>
-                <TableHead>Reports</TableHead>
-                <TableHead>Date</TableHead>
+                <TableHead>Created</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredPosts.map((post) => (
+              {posts.map((post) => (
                 <TableRow key={post.id}>
                   <TableCell>
                     <div className="max-w-xs">
                       <div className="font-medium truncate">{post.title}</div>
-                      <div className="text-sm text-gray-500 truncate">{post.content}</div>
+                      <div className="text-sm text-gray-500 truncate">
+                        {post.content}
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell>{post.author}</TableCell>
@@ -278,23 +300,43 @@ export default function PostsPage() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell>
-                    {post.reports > 0 ? (
-                      <Badge variant="destructive">{post.reports}</Badge>
-                    ) : (
-                      <span className="text-gray-400">0</span>
-                    )}
-                  </TableCell>
-                  <TableCell>{post.createdDate}</TableCell>
+                  <TableCell>{new Date(post.createdDate).toLocaleDateString()}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end space-x-2">
-                      <Button variant="ghost" size="icon">
-                        <Eye className="h-4 w-4" />
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => handlePostAction('approve', post.id)}
+                        disabled={isActionLoading === post.id}
+                      >
+                        {isActionLoading === post.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <CheckCircle className="h-4 w-4" />
+                        )}
                       </Button>
-                      <Button variant="ghost" size="icon">
-                        <Edit className="h-4 w-4" />
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => handlePostAction('hide', post.id)}
+                        disabled={isActionLoading === post.id}
+                      >
+                        <EyeOff className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon">
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => handlePostAction('boost', post.id)}
+                        disabled={isActionLoading === post.id}
+                      >
+                        <TrendingUp className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => handlePostAction('delete', post.id)}
+                        disabled={isActionLoading === post.id}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>

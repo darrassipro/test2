@@ -1,5 +1,8 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -8,129 +11,130 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { TrendingUp, TrendingDown, Users, FileText, Building2, Activity } from 'lucide-react';
-
-const analyticsData = {
-  overview: [
-    {
-      title: 'Total Users',
-      value: '12,345',
-      change: '+12%',
-      trend: 'up',
-      icon: Users,
-    },
-    {
-      title: 'Active Users (30d)',
-      value: '8,234',
-      change: '+8%',
-      trend: 'up',
-      icon: Activity,
-    },
-    {
-      title: 'Total Posts',
-      value: '45,678',
-      change: '+15%',
-      trend: 'up',
-      icon: FileText,
-    },
-    {
-      title: 'Total Communities',
-      value: '1,234',
-      change: '+5%',
-      trend: 'up',
-      icon: Building2,
-    },
-  ],
-  topCommunities: [
-    { name: 'Tech Enthusiasts', members: 2100, posts: 567, engagement: '85%' },
-    { name: 'Photography Club', members: 1890, posts: 423, engagement: '78%' },
-    { name: 'Gaming Community', members: 1650, posts: 389, engagement: '82%' },
-    { name: 'Cooking Enthusiasts', members: 1420, posts: 312, engagement: '76%' },
-    { name: 'Fitness & Health', members: 1200, posts: 298, engagement: '73%' },
-  ],
-  topUsers: [
-    { name: 'John Doe', posts: 45, likes: 1234, communities: 8 },
-    { name: 'Jane Smith', posts: 38, likes: 987, communities: 6 },
-    { name: 'Bob Johnson', posts: 32, likes: 876, communities: 5 },
-    { name: 'Alice Brown', posts: 29, likes: 765, communities: 7 },
-    { name: 'Charlie Wilson', posts: 25, likes: 654, communities: 4 },
-  ],
-  recentActivity: [
-    { action: 'New user registration', user: 'Mike Davis', time: '2 minutes ago' },
-    { action: 'Community created', user: 'Sarah Johnson', time: '15 minutes ago' },
-    { action: 'Post published', user: 'Tom Wilson', time: '23 minutes ago' },
-    { action: 'User reported content', user: 'Lisa Brown', time: '1 hour ago' },
-    { action: 'Community joined', user: 'David Lee', time: '2 hours ago' },
-  ],
-};
+import { TrendingUp, TrendingDown, Users, Building2, FileText, Activity, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { adminService, AnalyticsData } from '@/lib/services/adminService';
+import { handleApiError } from '@/lib/api';
 
 export default function AnalyticsPage() {
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [timeRange, setTimeRange] = useState('30d');
+
+  useEffect(() => {
+    fetchAnalytics();
+  }, [timeRange]);
+
+  const fetchAnalytics = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+      
+      const response = await adminService.getAnalytics({ timeRange });
+      
+      if (response.success && response.data) {
+        setAnalyticsData(response.data);
+      } else {
+        setError(response.message || 'Failed to fetch analytics data');
+      }
+    } catch (error: any) {
+      setError(handleApiError(error));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getTrendIcon = (trend: string) => {
+    return trend === 'up' ? (
+      <TrendingUp className="h-4 w-4 text-green-500" />
+    ) : (
+      <TrendingDown className="h-4 w-4 text-red-500" />
+    );
+  };
+
+  const getTrendColor = (trend: string) => {
+    return trend === 'up' ? 'text-green-600' : 'text-red-600';
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Loading analytics data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-4" />
+          <p className="text-red-600 mb-4">{error}</p>
+          <Button onClick={fetchAnalytics}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!analyticsData) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <p className="text-gray-600">No analytics data available</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Platform insights and performance metrics
-        </p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Platform performance metrics and insights
+          </p>
+        </div>
+        <div className="flex items-center space-x-4">
+          <select
+            value={timeRange}
+            onChange={(e) => setTimeRange(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="7d">Last 7 days</option>
+            <option value="30d">Last 30 days</option>
+            <option value="90d">Last 90 days</option>
+            <option value="1y">Last year</option>
+          </select>
+          <Button onClick={fetchAnalytics} disabled={isLoading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
-      {/* Overview Stats */}
+      {/* Overview Cards */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {analyticsData.overview.map((stat) => (
-          <Card key={stat.title}>
+        {analyticsData.overview.map((metric, index) => (
+          <Card key={index}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600">
-                {stat.title}
-              </CardTitle>
-              <stat.icon className="h-4 w-4 text-gray-400" />
+              <CardTitle className="text-sm font-medium">{metric.title}</CardTitle>
+              {getTrendIcon(metric.trend)}
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
-              <div className="flex items-center text-xs">
-                {stat.trend === 'up' ? (
-                  <TrendingUp className="h-3 w-3 text-green-500 mr-1" />
-                ) : (
-                  <TrendingDown className="h-3 w-3 text-red-500 mr-1" />
-                )}
-                <span className={stat.trend === 'up' ? 'text-green-600' : 'text-red-600'}>
-                  {stat.change} from last month
-                </span>
-              </div>
+              <div className="text-2xl font-bold">{metric.value}</div>
+              <p className={`text-xs ${getTrendColor(metric.trend)}`}>
+                {metric.change} from last period
+              </p>
             </CardContent>
           </Card>
         ))}
       </div>
 
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* User Growth Chart Placeholder */}
-        <Card>
-          <CardHeader>
-            <CardTitle>User Growth</CardTitle>
-            <CardDescription>Monthly user registration trends</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-              <p className="text-gray-500">Chart placeholder - User Growth</p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Engagement Chart Placeholder */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Engagement Metrics</CardTitle>
-            <CardDescription>Posts, likes, and comments over time</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center">
-              <p className="text-gray-500">Chart placeholder - Engagement</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Data Tables */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* Top Communities */}
         <Card>
@@ -153,10 +157,8 @@ export default function AnalyticsPage() {
                   <TableRow key={index}>
                     <TableCell className="font-medium">{community.name}</TableCell>
                     <TableCell>{community.members.toLocaleString()}</TableCell>
-                    <TableCell>{community.posts}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{community.engagement}</Badge>
-                    </TableCell>
+                    <TableCell>{community.posts.toLocaleString()}</TableCell>
+                    <TableCell>{community.engagement}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -167,8 +169,8 @@ export default function AnalyticsPage() {
         {/* Top Users */}
         <Card>
           <CardHeader>
-            <CardTitle>Top Contributors</CardTitle>
-            <CardDescription>Most active users on the platform</CardDescription>
+            <CardTitle>Top Users</CardTitle>
+            <CardDescription>Most active users by activity</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -184,7 +186,7 @@ export default function AnalyticsPage() {
                 {analyticsData.topUsers.map((user, index) => (
                   <TableRow key={index}>
                     <TableCell className="font-medium">{user.name}</TableCell>
-                    <TableCell>{user.posts}</TableCell>
+                    <TableCell>{user.posts.toLocaleString()}</TableCell>
                     <TableCell>{user.likes.toLocaleString()}</TableCell>
                     <TableCell>{user.communities}</TableCell>
                   </TableRow>
@@ -194,6 +196,97 @@ export default function AnalyticsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Growth Charts */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* User Growth */}
+        <Card>
+          <CardHeader>
+            <CardTitle>User Growth</CardTitle>
+            <CardDescription>Monthly user registration trends</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {analyticsData.growthData.users.map((data, index) => (
+                <div key={index} className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{data.month}</span>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-32 bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-500 h-2 rounded-full" 
+                        style={{ width: `${(data.value / 2500) * 100}%` }}
+                      ></div>
+                    </div>
+                    <span className="text-sm text-gray-600">{data.value.toLocaleString()}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Post Growth */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Post Growth</CardTitle>
+            <CardDescription>Monthly post creation trends</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {analyticsData.growthData.posts.map((data, index) => (
+                <div key={index} className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{data.month}</span>
+                  <div className="flex items-center space-x-2">
+                    <div className="w-32 bg-gray-200 rounded-full h-2">
+                      <div 
+                        className="bg-green-500 h-2 rounded-full" 
+                        style={{ width: `${(data.value / 1200) * 100}%` }}
+                      ></div>
+                    </div>
+                    <span className="text-sm text-gray-600">{data.value.toLocaleString()}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Engagement Metrics */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Engagement Metrics</CardTitle>
+          <CardDescription>Monthly engagement trends (likes, comments, shares)</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-6">
+            {analyticsData.growthData.engagement.map((data, index) => (
+              <div key={index} className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium">{data.month}</span>
+                  <span className="text-sm text-gray-500">
+                    Total: {(data.likes + data.comments + data.shares).toLocaleString()}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-red-600">{data.likes.toLocaleString()}</div>
+                    <div className="text-xs text-gray-500">Likes</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-blue-600">{data.comments.toLocaleString()}</div>
+                    <div className="text-xs text-gray-500">Comments</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-semibold text-green-600">{data.shares.toLocaleString()}</div>
+                    <div className="text-xs text-gray-500">Shares</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Recent Activity */}
       <Card>

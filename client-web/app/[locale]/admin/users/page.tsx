@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,96 +13,135 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Search, Plus, MoreHorizontal, Edit, Trash2, Ban } from 'lucide-react';
-
-// Mock data
-const users = [
-  {
-    id: 1,
-    name: 'John Doe',
-    email: 'john@example.com',
-    role: 'User',
-    status: 'Active',
-    joinDate: '2024-01-15',
-    communities: 3,
-    posts: 12,
-  },
-  {
-    id: 2,
-    name: 'Jane Smith',
-    email: 'jane@example.com',
-    role: 'Moderator',
-    status: 'Active',
-    joinDate: '2024-01-10',
-    communities: 5,
-    posts: 28,
-  },
-  {
-    id: 3,
-    name: 'Bob Johnson',
-    email: 'bob@example.com',
-    role: 'User',
-    status: 'Suspended',
-    joinDate: '2024-01-20',
-    communities: 1,
-    posts: 3,
-  },
-  {
-    id: 4,
-    name: 'Alice Brown',
-    email: 'alice@example.com',
-    role: 'Admin',
-    status: 'Active',
-    joinDate: '2023-12-01',
-    communities: 8,
-    posts: 45,
-  },
-  {
-    id: 5,
-    name: 'Charlie Wilson',
-    email: 'charlie@example.com',
-    role: 'User',
-    status: 'Active',
-    joinDate: '2024-02-01',
-    communities: 2,
-    posts: 7,
-  },
-];
+import { Search, Edit, Trash2, Ban, Shield, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { adminService, User } from '@/lib/services/adminService';
+import { handleApiError } from '@/lib/api';
 
 export default function UsersPage() {
+  const [users, setUsers] = useState<User[]>([]);
+  const [stats, setStats] = useState<any>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [isActionLoading, setIsActionLoading] = useState<number | null>(null);
+  const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState('All');
+  const [selectedStatus, setSelectedStatus] = useState('All');
 
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = selectedRole === 'All' || user.role === selectedRole;
-    return matchesSearch && matchesRole;
-  });
+  useEffect(() => {
+    fetchUsers();
+  }, [searchTerm, selectedRole, selectedStatus]);
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'Active':
-        return <Badge className="bg-green-100 text-green-800">Active</Badge>;
-      case 'Suspended':
-        return <Badge variant="destructive">Suspended</Badge>;
-      default:
-        return <Badge variant="secondary">{status}</Badge>;
+  const fetchUsers = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+      
+      const params: any = {};
+      if (searchTerm) params.search = searchTerm;
+      if (selectedRole !== 'All') params.role = selectedRole;
+      if (selectedStatus !== 'All') params.status = selectedStatus;
+
+      const response = await adminService.getUsers(params);
+      
+      if (response.success && response.data) {
+        setUsers(response.data.users);
+        setStats(response.data.stats);
+      } else {
+        setError(response.message || 'Failed to fetch users');
+      }
+    } catch (error: any) {
+      setError(handleApiError(error));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUserAction = async (action: string, userId: number, additionalData?: any) => {
+    try {
+      setIsActionLoading(userId);
+      let response;
+
+      switch (action) {
+        case 'ban':
+          response = await adminService.banUser(userId, additionalData?.reason);
+          break;
+        case 'unban':
+          response = await adminService.unbanUser(userId);
+          break;
+        case 'update_role':
+          response = await adminService.updateUserRole(userId, additionalData?.role);
+          break;
+        case 'delete':
+          response = await adminService.deleteUser(userId);
+          break;
+        default:
+          throw new Error('Invalid action');
+      }
+
+      if (response.success) {
+        // Refresh the users list
+        await fetchUsers();
+      } else {
+        setError(response.message || 'Action failed');
+      }
+    } catch (error: any) {
+      setError(handleApiError(error));
+    } finally {
+      setIsActionLoading(null);
     }
   };
 
   const getRoleBadge = (role: string) => {
     switch (role) {
-      case 'Admin':
-        return <Badge className="bg-purple-100 text-purple-800">Admin</Badge>;
-      case 'Moderator':
-        return <Badge className="bg-blue-100 text-blue-800">Moderator</Badge>;
-      case 'User':
+      case 'admin':
+        return <Badge variant="destructive">Admin</Badge>;
+      case 'moderator':
+        return <Badge className="bg-orange-100 text-orange-800">Moderator</Badge>;
+      case 'user':
         return <Badge variant="outline">User</Badge>;
       default:
         return <Badge variant="secondary">{role}</Badge>;
     }
   };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'Active':
+        return <Badge className="bg-green-100 text-green-800">Active</Badge>;
+      case 'Inactive':
+        return <Badge variant="secondary">Inactive</Badge>;
+      case 'Banned':
+        return <Badge variant="destructive">Banned</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-gray-600">Loading users...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && users.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-4" />
+          <p className="text-red-600 mb-4">{error}</p>
+          <Button onClick={fetchUsers}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -113,10 +152,56 @@ export default function UsersPage() {
             Manage and monitor all platform users
           </p>
         </div>
-        <Button>
-          <Plus className="h-4 w-4 mr-2" />
-          Add User
+        <Button onClick={fetchUsers} disabled={isLoading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+          Refresh
         </Button>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <p className="text-red-600">{error}</p>
+        </div>
+      )}
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+            <Shield className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.total || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Users</CardTitle>
+            <Shield className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.active || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Verified Users</CardTitle>
+            <Shield className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.verified || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Admins</CardTitle>
+            <Shield className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.admins || 0}</div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Filters */}
@@ -141,9 +226,19 @@ export default function UsersPage() {
               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="All">All Roles</option>
-              <option value="Admin">Admin</option>
-              <option value="Moderator">Moderator</option>
-              <option value="User">User</option>
+              <option value="admin">Admin</option>
+              <option value="moderator">Moderator</option>
+              <option value="user">User</option>
+            </select>
+            <select
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="All">All Status</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+              <option value="Banned">Banned</option>
             </select>
           </div>
         </CardContent>
@@ -152,9 +247,9 @@ export default function UsersPage() {
       {/* Users Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Users ({filteredUsers.length})</CardTitle>
+          <CardTitle>Users ({users.length})</CardTitle>
           <CardDescription>
-            A list of all users in your platform including their details and status.
+            A list of all users on your platform including their details and activity.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -162,37 +257,76 @@ export default function UsersPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>User</TableHead>
+                <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Join Date</TableHead>
                 <TableHead>Communities</TableHead>
                 <TableHead>Posts</TableHead>
+                <TableHead>Joined</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredUsers.map((user) => (
+              {users.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell>
-                    <div>
-                      <div className="font-medium">{user.name}</div>
-                      <div className="text-sm text-gray-500">{user.email}</div>
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                        {user.profileImage ? (
+                          <img
+                            src={user.profileImage}
+                            alt={user.firstName}
+                            className="w-8 h-8 rounded-full"
+                          />
+                        ) : (
+                          <span className="text-sm font-medium">
+                            {user.firstName?.[0]}{user.lastName?.[0]}
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-medium">{user.firstName} {user.lastName}</div>
+                        <div className="text-sm text-gray-500">@{user.username}</div>
+                      </div>
                     </div>
                   </TableCell>
+                  <TableCell>{user.email}</TableCell>
                   <TableCell>{getRoleBadge(user.role)}</TableCell>
                   <TableCell>{getStatusBadge(user.status)}</TableCell>
-                  <TableCell>{user.joinDate}</TableCell>
                   <TableCell>{user.communities}</TableCell>
                   <TableCell>{user.posts}</TableCell>
+                  <TableCell>{new Date(user.createdAt).toLocaleDateString()}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end space-x-2">
-                      <Button variant="ghost" size="icon">
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        disabled={isActionLoading === user.id}
+                      >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon">
-                        <Ban className="h-4 w-4" />
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => handleUserAction(
+                          user.status === 'Active' ? 'ban' : 'unban', 
+                          user.id,
+                          { reason: 'Admin action' }
+                        )}
+                        disabled={isActionLoading === user.id}
+                      >
+                        {isActionLoading === user.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Ban className="h-4 w-4" />
+                        )}
                       </Button>
-                      <Button variant="ghost" size="icon">
+                      <Button 
+                        variant="ghost" 
+                        size="icon"
+                        onClick={() => handleUserAction('delete', user.id)}
+                        disabled={isActionLoading === user.id}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
