@@ -1,23 +1,26 @@
 import { configureStore } from '@reduxjs/toolkit';
-import userApi from '../services/api/UserApi';
-import bookingApi from '../services/api/bookingApi';
+import { api } from './api/baseApi';
+// Import endpoint files to trigger injections
+import './api/authApi';
+import './api/userApi';
+import './api/communityApi';
+import './api/postApi';
+import './api/adminApi';
+import './api/bookingApi';
 
 const configurestore = configureStore({
   reducer: {
-    [userApi.reducerPath]: userApi.reducer,
-    [bookingApi.reducerPath]: bookingApi.reducer,
+    [api.reducerPath]: api.reducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
         ignoredActions: [
-          'userApi/subscriptions/unsubscribeQueryResult',
-          'userApi/mutations/removeMutationResult',
-          'bookingApi/subscriptions/unsubscribeQueryResult',
-          'bookingApi/mutations/removeMutationResult',
+          'api/subscriptions/unsubscribeQueryResult',
+          'api/mutations/removeMutationResult',
         ],
       },
-    }).concat(userApi.middleware, bookingApi.middleware),
+    }).concat(api.middleware),
 });
 
 export default configurestore;

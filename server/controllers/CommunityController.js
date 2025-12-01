@@ -3,7 +3,6 @@ const { getUserRole } = require('../middleware/checkAdminRole');
 const { deleteFile } = require('../config/cloudinary');
 const sequelize = require('sequelize'); 
 const { Op, literal } = require('sequelize');
-
 /**
  * @description Créer une nouvelle communauté (Community) et associer les catégories et les fichiers.
  * @route POST /api/communities
@@ -13,15 +12,12 @@ exports.createCommunity = async (req, res) => {
     const { name, description, isPremium, price, categoryIds } = req.body;
     const { images, videos, audios, virtualTours } = req.files;
     const uploadedFiles = [];
-
 if (images && images.length > 0) {
     uploadedFiles.push(...images);
 }
-
 if (videos && videos.length > 0) {
     uploadedFiles.push(...videos);
 }
-
 if (audios && audios.length > 0) {
     uploadedFiles.push(...audios);
 } 
@@ -33,9 +29,7 @@ if (uploadedFiles.length > 0) {
     console.log("Uploaded File Example Properties:", uploadedFiles[0]);
 }
     const creatorUserId = req.user.userId; 
-
     if (!name || name.length < 3) {
-
         if (uploadedFiles && uploadedFiles.length > 0) {
             uploadedFiles.forEach(async (file) => {
                 await deleteFile(file.filename).catch(e => console.error("Erreur de nettoyage Cloudinary:", e));
@@ -53,7 +47,6 @@ if (uploadedFiles.length > 0) {
     if (!finalIsPremium) {
         finalPrice = 0;
     }
-
     const communityData = {
         creatorUserId,
         name,
@@ -61,7 +54,6 @@ if (uploadedFiles.length > 0) {
         isPremium: finalIsPremium,
         price: finalPrice,
     };
-
     let createdCommunity = null;
     let categoriesArray = [];
     
@@ -75,10 +67,8 @@ if (uploadedFiles.length > 0) {
             categoriesArray = categoryIds.split(',').map(id => id.trim()).filter(id => id);
         }
     }
-
     try {
         createdCommunity = await Community.create(communityData);
-
         if (uploadedFiles && uploadedFiles.length > 0) {
             // Map roles sent in the form-data (multiple 'roles' fields) to uploaded files by index
             let rolesArray = [];
@@ -86,7 +76,6 @@ if (uploadedFiles.length > 0) {
                 if (Array.isArray(req.body.roles)) rolesArray = req.body.roles;
                 else rolesArray = [req.body.roles];
             }
-
             const filesToCreate = uploadedFiles.map((file, index) => {
                 const roleFromBody = rolesArray[index];
                 const role = roleFromBody || file.role || 'gallery';
@@ -99,7 +88,6 @@ if (uploadedFiles.length > 0) {
                     isPrincipale: role === 'banner'
                 };
             });
-
             await CommunityFile.bulkCreate(filesToCreate);
         }
         
@@ -108,16 +96,13 @@ if (uploadedFiles.length > 0) {
                 communityId: createdCommunity.id,
                 communityCategoryId: categoryId 
             }));
-
             await RCommCategory.bulkCreate(communityCategoriesData); 
         }
-
         await CommunityMembership.create({
             communityId: createdCommunity.id,
             userId: creatorUserId,
             isCreator: true 
         });
-
         // 4. Création de l'entrée Admin (Owner)
         await Admin.create({
             communityId: createdCommunity.id,
@@ -126,7 +111,6 @@ if (uploadedFiles.length > 0) {
         });
         
         await createdCommunity.increment('totalMembers', { by: 1 });
-
         const communityWithFiles = await Community.findByPk(createdCommunity.id, {
             include: [
                 {
@@ -141,13 +125,11 @@ if (uploadedFiles.length > 0) {
                 }
             ]
         });
-
         return res.status(201).json({
             success: true,
             message: "Communauté créée avec succès.",
             community: communityWithFiles
         });
-
     } catch (error) {
         if (uploadedFiles && uploadedFiles.length > 0) {
             uploadedFiles.forEach(async (file) => {
@@ -157,7 +139,6 @@ if (uploadedFiles.length > 0) {
         if (createdCommunity) {
             await Community.destroy({ where: { id: createdCommunity.id }, force: true }).catch(e => console.error("Erreur de nettoyage de la communauté DB:", e));
         }
-
         console.error("Erreur lors de la création de la communauté:", error);
         return res.status(500).json({
             success: false,
@@ -166,7 +147,6 @@ if (uploadedFiles.length > 0) {
         });
     }
 };
-
 /**
  * @description Récupère la liste des membres d'une communauté
  * @route GET /api/communities/:id/members
@@ -177,10 +157,8 @@ exports.getCommunityMembers = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 50;
     const offset = (page - 1) * limit;
-
     try {
         const { CommunityMembership, User } = require('../models/index');
-
         const { count, rows: memberships } = await CommunityMembership.findAndCountAll({
             where: { communityId },
             limit,
@@ -194,7 +172,6 @@ exports.getCommunityMembers = async (req, res) => {
                 }
             ]
         });
-
         const members = memberships.map(m => {
             const u = m.user || {};
             return {
@@ -205,16 +182,13 @@ exports.getCommunityMembers = async (req, res) => {
                 joinedAt: m.createdAt
             };
         });
-
         const pagination = {
             totalItems: count,
             totalPages: Math.ceil(count / limit),
             currentPage: page,
             pageSize: limit
         };
-
         return res.status(200).json({ success: true, members, pagination });
-
     } catch (error) {
         console.error('Erreur lors de la récupération des membres de la communauté:', error);
         return res.status(500).json({ success: false, message: 'Échec de la récupération des membres.', error: error.message });
@@ -226,11 +200,9 @@ exports.getCommunityMembers = async (req, res) => {
  * @access Public (ou Private si nécessaire)
  */
 exports.getAllCommunities = async (req, res) => {
-
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
-
     try {
         const { count, rows: communities } = await Community.findAndCountAll({
             where: {
@@ -253,24 +225,21 @@ exports.getAllCommunities = async (req, res) => {
                 }
             ],
             attributes: [
-                'id', 'name', 'description', 'isVerified', 'totalMembers', 
-                'totalPosts', 'totalProducts', 'isPremium', 'price'
+                'id', 'name', 'description', 'country', 'facebookLink', 'instagramLink', 'whatsappLink',
+                'isVerified', 'totalMembers', 'totalPosts', 'totalProducts', 'isPremium', 'price'
             ]
         });
-
         const paginationInfos = {
             totalItems: count,
             totalPages: Math.ceil(count / limit),
             currentPage: page,
             pageSize: limit
         };
-
         return res.status(200).json({
             success: true,
             communities: communities,
             paginationInfos: paginationInfos
         });
-
     } catch (error) {
         console.error("Erreur lors de la récupération de toutes les communautés:", error);
         return res.status(500).json({
@@ -280,7 +249,6 @@ exports.getAllCommunities = async (req, res) => {
         });
     }
 };
-
 /**
  * @description Récupérer les détails d'une communauté par ID (avec gestion de l'adhésion)
  * @route GET /api/communities/:id
@@ -291,14 +259,12 @@ exports.getCommunity = async (req, res) => {
     const isUserMemberShip = req.isUserMemberShip;
     const communityId = community?.id;
     const userId = req.user?.userId;
-
     console.log('GET /api/communities/:id called', {
         paramsId: req.params.id,
         resolvedCommunityId: communityId,
         user: req.user ? { id: req.user.userId } : null,
         isUserMemberShip
     });
-
     try {
         const totalPostsCount = await Post.count({
             where: { communityId: communityId }
@@ -309,8 +275,8 @@ exports.getCommunity = async (req, res) => {
           });
         const communityInformations = await Community.findByPk(communityId, {
             attributes: [
-                'id', 'name', 'description', 'isVerified', 'totalMembers', 
-                'totalPosts', 'totalProducts', 'isPremium', 'price', 'createdAt'
+                                'id', 'name', 'description', 'country', 'facebookLink', 'instagramLink', 'whatsappLink',
+                'isVerified', 'totalMembers', 'totalPosts', 'totalProducts', 'isPremium', 'price', 'createdAt'
             ],
             include: [
                 { 
@@ -325,12 +291,9 @@ exports.getCommunity = async (req, res) => {
                 }
             ]
         });
-
         const communityData = communityInformations.get({ plain: true });
-
         communityData.totalPosts = totalPostsCount;
         communityData.totalProducts = totalProductsCount;
-
          await Community.update(
              { totalPosts: totalPostsCount },
              { where: { id: communityId } }
@@ -339,27 +302,71 @@ exports.getCommunity = async (req, res) => {
     { totalProducts: totalProductsCount },
     { where: { id: communityId } }
 );
-        
+
         if (!isUserMemberShip) {
+            // For non-members, show only public posts
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
+            const offset = (page - 1) * limit;
+
+            const { PostLike } = require('../models/index');
+            const { count, rows: publicPosts } = await Post.findAndCountAll({
+                where: { 
+                    communityId: communityId,
+                    status: 'approved',
+                    isVisibleOutsideCommunity: true,
+                    isDeleted: false
+                },
+                limit: limit,
+                offset: offset,
+                order: [['createdAt', 'DESC']],
+                include: [ 
+                    { model: User, as: 'user', attributes: ['id', 'firstName','lastName', 'profileImage'] },
+                    { model: PostCategory, as: 'category', attributes: ['id', 'name'] },
+                    { model: require('../models/index').PostFile, as: 'postFiles', attributes: ['url', 'type'] },
+                    { model: PostLike, as: 'likedBy', attributes: ['userId'] },
+                ]
+            });
 
             const files = communityInformations.communityFiles.map(file => ({
                 url: file.url,
                 type: file.type,
                 isPrincipale: file.isPrincipale
             }));
+            // Get current userId from request (null for non-members)
+            const currentUserId = req.user ? req.user.userId : null;
+
+            // Map posts to add like count and isLiked
+            const postsWithLikes = publicPosts.map(post => {
+                const plain = post.get({ plain: true });
+                const likes = plain.likedBy ? plain.likedBy.length : 0;
+                const isLiked = currentUserId ? plain.likedBy.some(like => like.userId === currentUserId) : false;
+                return {
+                    ...plain,
+                    likes,
+                    isLiked
+                };
+            });
+
+            const paginationInfos = {
+                totalItems: count,
+                totalPages: Math.ceil(count / limit),
+                currentPage: page,
+                pageSize: limit
+            };
 
             return res.status(200).json({
                 success: true,
                 communityInformations: communityData,
+                communityPosts: postsWithLikes,
+                paginationInfos: paginationInfos,
                 isUserMemberShip: false,
                 userRole: null
             });
-
         } else {
                 const page = parseInt(req.query.page) || 1;
                 const limit = parseInt(req.query.limit) || 10;
                 const offset = (page - 1) * limit;
-
                 // Determine user role in this community to decide which posts to include
                 let userRole = null;
                 try {
@@ -367,13 +374,11 @@ exports.getCommunity = async (req, res) => {
                 } catch (e) {
                     console.warn('Could not determine user role for community posts filtering', e);
                 }
-
                 // If user is owner/admin/moderator, include all statuses; otherwise only approved
                 const postWhere = { communityId: communityId };
                 if (!userRole || !['owner', 'admin', 'moderator'].includes(userRole)) {
                     postWhere.status = 'approved';
                 }
-
                 const { PostLike } = require('../models/index');
                 const { count, rows: communityPosts } = await Post.findAndCountAll({
                     where: postWhere,
@@ -387,10 +392,8 @@ exports.getCommunity = async (req, res) => {
                         { model: PostLike, as: 'likedBy', attributes: ['userId'] },
                     ]
                 });
-
                 // Get current userId from request
                 const currentUserId = req.user ? req.user.userId : null;
-
                 // Map posts to add like count and isLiked
                 const postsWithLikes = communityPosts.map(post => {
                     const plain = post.get({ plain: true });
@@ -402,7 +405,6 @@ exports.getCommunity = async (req, res) => {
                         isLiked
                     };
                 });
-
             const paginationInfos = {
                 totalItems: count,
                 totalPages: Math.ceil(count / limit),
@@ -421,7 +423,6 @@ exports.getCommunity = async (req, res) => {
                 userRole: userRole || null
             });
         }
-
     } catch (error) {
         console.error("Erreur lors de la récupération des détails de la communauté:", error);
         return res.status(500).json({
@@ -431,8 +432,6 @@ exports.getCommunity = async (req, res) => {
         });
     }
 };
-
-
 /**
  * @description Mettre à jour une communauté existante
  * @route PUT /api/communities/:id
@@ -440,15 +439,13 @@ exports.getCommunity = async (req, res) => {
  */
 exports.updateCommunity = async (req, res) => {
     const communityId = req.params.id;
-    const { name, description, isPremium, price, filesToDelete, principalFileId } = req.body; 
-    const { images, videos, audios, virtualTours } = req.files || {};
+const { name, description, country, facebookLink, instagramLink, whatsappLink, isPremium, price, filesToDelete, principalFileId } = req.body;    const { images, videos, audios, virtualTours } = req.files || {};
     const userId = req.user.userId;
     const allUploadedFiles = [];
 if (images) allUploadedFiles.push(...images);
 if (videos) allUploadedFiles.push(...videos);
 if (audios) allUploadedFiles.push(...audios);
 if (virtualTours) allUploadedFiles.push(...virtualTours);
-
     let newPublicIds = allUploadedFiles.map(f => f.filename);
     try {
         const community = await Community.findOne({
@@ -464,11 +461,13 @@ if (virtualTours) allUploadedFiles.push(...virtualTours);
         if (community.creatorUserId !== userId) {
             return res.status(403).json({ success: false, message: "Accès refusé. Seul le créateur peut modifier la communauté." });
         }
-
         let updateData = {};
         if (name && name.length >= 3) updateData.name = name;
         if (description !== undefined) updateData.description = description;
-
+                if (country !== undefined) updateData.country = country;
+        if (facebookLink !== undefined) updateData.facebookLink = facebookLink;
+        if (instagramLink !== undefined) updateData.instagramLink = instagramLink;
+        if (whatsappLink !== undefined) updateData.whatsappLink = whatsappLink;
         if (isPremium !== undefined) {
             const finalIsPremium = (isPremium === 'true');
             let finalPrice = finalIsPremium ? (parseFloat(price) || 0) : 0;
@@ -476,11 +475,9 @@ if (virtualTours) allUploadedFiles.push(...virtualTours);
             updateData.isPremium = finalIsPremium;
             updateData.price = finalPrice;
         }
-
         if (Object.keys(updateData).length > 0) {
             await community.update(updateData);
         }
-
         let filesToDeleteArray = [];
         if (filesToDelete) {
             try {
@@ -489,7 +486,6 @@ if (virtualTours) allUploadedFiles.push(...virtualTours);
                 filesToDeleteArray = filesToDelete.split(',').map(id => id.trim());
             }
         }
-
         if (filesToDeleteArray.length > 0) {
             const deletedFiles = await CommunityFile.findAll({
                 where: {
@@ -497,7 +493,6 @@ if (virtualTours) allUploadedFiles.push(...virtualTours);
                     id: { [Op.in]: filesToDeleteArray }
                 }
             });
-
             for (const file of deletedFiles) {
                 await deleteFile(file.cloudinaryId).catch(e => console.warn(`Avertissement: Échec de la suppression Cloudinary ID ${file.cloudinaryId}`, e));
                 await file.destroy();
@@ -511,7 +506,6 @@ if (virtualTours) allUploadedFiles.push(...virtualTours);
                 if (Array.isArray(req.body.roles)) rolesArray = req.body.roles;
                 else rolesArray = [req.body.roles];
             }
-
             const filesToCreate = allUploadedFiles.map((file, index) => ({
                 communityId: communityId,
                 url: file.path,
@@ -520,33 +514,27 @@ if (virtualTours) allUploadedFiles.push(...virtualTours);
                 role: rolesArray[index] || 'gallery',
                 isPrincipale: (rolesArray[index] === 'banner') || false
             }));
-
             await CommunityFile.bulkCreate(filesToCreate);
         }
-
         if (principalFileId) {
             await CommunityFile.update({ isPrincipale: false }, {
                 where: { communityId: communityId }
             });
-
             await CommunityFile.update({ isPrincipale: true }, {
                 where: { id: principalFileId, communityId: communityId }
             });
         }
-
         const updatedCommunity = await Community.findByPk(communityId, {
              include: [
                 { model: CommunityFile, as: 'communityFiles', attributes: ['url', 'type', 'isPrincipale', 'id', 'role'] },
                 { model: User, as: 'creator', attributes: ['id', 'firstName', 'lastName', 'profileImage'] }
             ]
         });
-
         return res.status(200).json({
             success: true,
             message: "Communauté mise à jour avec succès.",
             community: updatedCommunity
         });
-
     } catch (error) {
         if (newPublicIds && newPublicIds.length > 0) {
         newPublicIds.forEach(async (publicId) => {
@@ -561,11 +549,9 @@ if (virtualTours) allUploadedFiles.push(...virtualTours);
         });
     }
 };
-
 exports.deleteCommunity = async (req, res) => {
     const communityId = req.params.id;
     const userId = req.user.userId;
-
     try {
         const community = await Community.findOne({
             where: { id: communityId, isDeleted: false } 
@@ -578,7 +564,6 @@ exports.deleteCommunity = async (req, res) => {
         if (community.creatorUserId !== userId) {
             return res.status(403).json({ success: false, message: "Accès refusé. Seul le créateur peut supprimer la communauté." });
         }
-
         const filesToDelete = await CommunityFile.findAll({
             where: { communityId: communityId }
         });
@@ -598,16 +583,13 @@ exports.deleteCommunity = async (req, res) => {
             { isDeleted: true },
             { where: { id: communityId } }
         );
-
         if (updatedRows === 0) {
             return res.status(404).json({ success: false, message: "Échec de la suppression de la communauté dans la DB." });
         }
-
         return res.status(200).json({
             success: true,
             message: "Communauté masquée (isDeleted: true) avec succès. Fichiers et adhésions supprimés définitivement."
         });
-
     } catch (error) {
         console.error("Erreur lors de la suppression (soft) de la communauté:", error);
         return res.status(500).json({
@@ -617,7 +599,6 @@ exports.deleteCommunity = async (req, res) => {
         });
     }
 };
-
 /**
  * @description Récupère les communautés auxquelles l'utilisateur n'est pas encore membre.
  * @route GET /api/communities/not-joined
@@ -628,19 +609,16 @@ exports.getCommunitiesNotJoined = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
     const userId = req.user.userId; 
-
     try {
         const userJoinedCommunityIds = await CommunityMembership.findAll({
             where: { userId: userId },
             attributes: ['communityId'],
             raw: true, 
         }).then(memberships => memberships.map(m => m.communityId));
-
         const whereCondition = {
             isDeleted: false,
             id: { [Op.notIn]: userJoinedCommunityIds }
         };
-
         const { count, rows: communities } = await Community.findAndCountAll({
             where: whereCondition,
             limit: limit,
@@ -660,24 +638,21 @@ exports.getCommunitiesNotJoined = async (req, res) => {
                 }
             ],
             attributes: [
-                'id', 'name', 'description', 'isVerified', 'totalMembers', 
-                'totalPosts', 'totalProducts', 'isPremium', 'price'
+                                'id', 'name', 'description', 'country', 'facebookLink', 'instagramLink', 'whatsappLink',
+                'isVerified', 'totalMembers', 'totalPosts', 'totalProducts', 'isPremium', 'price'
             ]
         });
-
         const paginationInfos = {
             totalItems: count,
             totalPages: Math.ceil(count / limit),
             currentPage: page,
             pageSize: limit
         };
-
         return res.status(200).json({
             success: true,
             communities: communities,
             paginationInfos: paginationInfos
         });
-
     } catch (error) {
         console.error("Erreur lors de la récupération des communautés non-jointes:", error);
         return res.status(500).json({
@@ -687,7 +662,6 @@ exports.getCommunitiesNotJoined = async (req, res) => {
         });
     }
 };
-
 /**
  * @description Joindre une communauté
  * @route POST /api/communities/:id/join
@@ -697,7 +671,6 @@ exports.joinCommunity = async (req, res) => {
     // Support UUID or numeric IDs — keep the raw param and use it directly
     const communityId = req.params.id;
     const userId = req.user.userId;
-
     try {
         console.log(`Join request: userId=${userId}, communityId=${communityId}`);
         // Check community exists
@@ -706,24 +679,20 @@ exports.joinCommunity = async (req, res) => {
         if (!community) {
             return res.status(404).json({ success: false, message: 'Communauté introuvable.' });
         }
-
         // Check if already member
         const existing = await CommunityMembership.findOne({ where: { communityId: communityId, userId: userId } });
         if (existing) {
             return res.status(200).json({ success: true, message: 'Vous êtes déjà membre de cette communauté.' });
         }
-
         // Create membership
         await CommunityMembership.create({ communityId: communityId, userId: userId, isCreator: false });
         await community.increment('totalMembers', { by: 1 });
-
         return res.status(201).json({ success: true, message: 'Adhésion réussie.' });
     } catch (error) {
         console.error('Erreur lors de l\'adhésion à la communauté:', error);
         return res.status(500).json({ success: false, message: 'Échec de l\'adhésion.', error: error.message });
     }
 };
-
 /**
  * @description Récupère les communautés dont l'utilisateur authentifié est membre.
  * @route GET /api/communities/user-joined
@@ -739,9 +708,7 @@ exports.getUserCommunities = async (req, res) => {
             attributes: ['communityId'],
             raw: true
         });
-
         const communityIds = memberships.map(m => m.communityId);
-
         if (communityIds.length === 0) {
             return res.status(200).json({
                 success: true,
@@ -749,7 +716,6 @@ exports.getUserCommunities = async (req, res) => {
                 communities: []
             });
         }
-
         // 2. Récupérer les informations minimales des communautés
         const communities = await Community.findAll({
             where: {
@@ -771,13 +737,11 @@ exports.getUserCommunities = async (req, res) => {
                 'totalMembers' 
             ]
         });
-
         // 3. Formater la réponse pour correspondre au besoin de l'UI (Nom + Profil + Membres)
         const formattedCommunities = communities.map(community => {
             const file = community.communityFiles && community.communityFiles.length > 0
                 ? community.communityFiles[0]
                 : { url: null };
-
             const profileImage = community.communityFiles.find(f => f.role === 'avatar') || file;
             const bannerImage = community.communityFiles.find(f => f.role === 'banner');
             return {
@@ -788,12 +752,10 @@ exports.getUserCommunities = async (req, res) => {
                 bannerImage: bannerImage ? bannerImage.url : null
             };
         });
-
         return res.status(200).json({
             success: true,
             communities: formattedCommunities
         });
-
     } catch (error) {
         console.error("Erreur lors de la récupération des communautés membres:", error);
         return res.status(500).json({
@@ -816,14 +778,12 @@ exports.getPublicPostByCommunity = async (req, res) => {
         const currentUserId = req.user ? req.user.userId : null;
         
         const communityId = req.params.id; 
-
         let whereCondition = { 
             communityId: communityId,
             isDeleted: false,
             status: 'approved', 
             isVisibleOutsideCommunity: true 
         };
-
         const { count, rows: posts } = await Post.findAndCountAll({
             where: whereCondition,
             limit: limit,
@@ -847,7 +807,6 @@ exports.getPublicPostByCommunity = async (req, res) => {
                 ]
             },
         });
-
         const formattedPosts = posts.map(post => {
             const rawPost = post.get({ plain: true });
             return {
@@ -858,7 +817,6 @@ exports.getPublicPostByCommunity = async (req, res) => {
                 isSavedCount: undefined
             };
         });
-
         res.status(200).json({
             success: true,
             communityId: communityId,
@@ -867,7 +825,6 @@ exports.getPublicPostByCommunity = async (req, res) => {
             currentPage: page,
             posts: formattedPosts
         });
-
     } catch (error) {
         console.error('Error fetching public community posts:', error);
         res.status(500).json({ success: false, message: "Échec de la récupération des publications publiques.", error: error.message });

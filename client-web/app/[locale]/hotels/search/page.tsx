@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { MapPin, ArrowRight, Search, X, Filter, Star } from 'lucide-react';
 import Image from 'next/image';
 import Navbar from '@/components/home/Navbar';
-import { useLazyListHotelsQuery } from '@/services/api/bookingApi';
+import { useLazyListHotelsQuery } from '@/lib/api/bookingApi';
 
 export default function HotelSearchPage() {
   const router = useRouter();

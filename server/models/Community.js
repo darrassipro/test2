@@ -62,6 +62,22 @@ const Community = sequelize.define(
 			defaultValue: false,
 			allowNull: false,
 		},
+				country: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
+		facebookLink: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
+		instagramLink: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
+		whatsappLink: {
+			type: DataTypes.STRING,
+			allowNull: true,
+		},
 	},
 	{
 		tableName: "communities",

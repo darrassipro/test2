@@ -46,6 +46,7 @@ const formatUserResponse = (user) => {
         totalCommunities: user.totalCommunities,
         isVerified: user.isVerified,
         isActive: user.isActive,
+        role: user.role || 'user',
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
     };

@@ -1,5 +1,6 @@
-// Configuration de l'API backend
+// Backend API Configuration
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
+export const SERVER_BASE_URL = process.env.NEXT_PUBLIC_SERVER_DOMAIN || 'http://localhost:8080';
 
 export const BOOKING_ENDPOINTS = {
   PLACES: `${API_BASE_URL}/booking/places`,

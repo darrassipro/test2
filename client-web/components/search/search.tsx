@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Calendar, Users, MapPin, Search, Sparkles, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
-import { useLazySearchPlacesQuery } from '@/services/api/bookingApi';
+import { useLazySearchPlacesQuery } from '@/lib/api/bookingApi';
 
 export default function SearchComponent() {
   const router = useRouter();

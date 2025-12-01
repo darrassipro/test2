@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { MapPin, ArrowRight, UtensilsCrossed, Shield, Info, Star } from 'lucide-react';
 import Image from 'next/image';
 import Navbar from '@/components/home/Navbar';
-import { useLazySearchRatesQuery } from '@/services/api/bookingApi';
+import { useLazySearchRatesQuery } from '@/lib/api/bookingApi';
 
 export default function HotelResultsPage() {
   const searchParams = useSearchParams();

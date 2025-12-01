@@ -5,16 +5,17 @@ import './globals.css';
 const SUPPORTED_LOCALES = ['fr', 'ar', 'en'] as const;
 type SupportedLocale = (typeof SUPPORTED_LOCALES)[number];
 
-const getLocaleFromCookies = (): SupportedLocale => {
-  const localeCookie = cookies().get('NEXT_LOCALE')?.value;
+const getLocaleFromCookies = async (): Promise<SupportedLocale> => {
+  const cookieStore = await cookies();
+  const localeCookie = cookieStore.get('NEXT_LOCALE')?.value;
   if (localeCookie && SUPPORTED_LOCALES.includes(localeCookie as SupportedLocale)) {
     return localeCookie as SupportedLocale;
   }
   return 'fr';
 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
-  const locale = getLocaleFromCookies();
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const locale = await getLocaleFromCookies();
 
   return (
     <html lang={locale} suppressHydrationWarning>

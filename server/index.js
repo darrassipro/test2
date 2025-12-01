@@ -110,7 +110,7 @@ app.use('/api/categories', postCategoryRouter);
 app.use('/api/categories', commCategoryRouter);
 app.use('/api/communities', communityRouter);
 app.use('/api/follow/', followRouter);
-app.use('/api/admin/communities', adminRouter);
+app.use('/api/admin', adminRouter); // Platform-level and community-level admin routes
 app.use('/api/product-categories', productCategoryRouter);
 app.use('/api/products', productRouter);
 app.use('/api/routes', routeRouter);

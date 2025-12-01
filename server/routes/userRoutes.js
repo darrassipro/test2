@@ -1,4 +1,5 @@
 const express = require('express');
+const { body } = require('express-validator');
 const { authenticateToken } = require('../middleware/authEnhanced');
 const { uploadImage } = require('../config/cloudinary');
 
@@ -13,13 +14,25 @@ const {
 } = require('../controllers/userController.js');
 
 const UserRouter = express.Router();
-
+// Validation rules pour la mise à jour du mot de passe
+const updatePasswordValidation = [
+  body('currentPassword')
+    .notEmpty()
+    .withMessage('Le mot de passe actuel est requis'),
+  body('newPassword')
+    .notEmpty()
+    .withMessage('Le nouveau mot de passe est requis')
+    .isLength({ min: 8 })
+    .withMessage('Le nouveau mot de passe doit contenir au moins 8 caractères')
+    .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+    .withMessage('Le nouveau mot de passe doit contenir au moins une minuscule, une majuscule et un chiffre'),
+];
 // Routes protégées (nécessitent une authentification)
 UserRouter.get('/me', authenticateToken, getCurrentUser);
 UserRouter.get('/', authenticateToken, getAllUsers);
 UserRouter.get('/:id', authenticateToken, getUserById);
 UserRouter.put('/update', authenticateToken, uploadImage.single('profileImage'), updateUser);
-UserRouter.put('/updatePassword', authenticateToken, updatePassword);
+UserRouter.put('/updatePassword', authenticateToken, updatePasswordValidation, updatePassword);
 UserRouter.post('/complete-registration', authenticateToken, completeRegistration);
 UserRouter.delete('/delete', authenticateToken, deleteUser);
 

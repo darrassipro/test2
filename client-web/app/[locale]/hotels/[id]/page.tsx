@@ -38,7 +38,7 @@ import {
   useGetHotelReviewsQuery,
   useLazyAskHotelQuestionQuery,
   useLazySearchRatesQuery
-} from '@/services/api/bookingApi';
+} from '@/lib/api/bookingApi';
 
 type TabType = 'overview' | 'info' | 'facilities' | 'house-rules' | 'reviews';
 

@@ -245,3 +245,155 @@ exports.checkAdminStatus = async (req, res) => {
         });
     }
 };
+
+/**
+ * @description Get platform dashboard statistics
+ * @access Private (Admin only)
+ */
+exports.getDashboard = async (req, res) => {
+    try {
+        // Get total users
+        const totalUsers = await User.count({ where: { isDeleted: false } });
+        const activeUsers = await User.count({ where: { isActive: true, isDeleted: false } });
+        
+        // Get users from last month for growth calculation
+        const lastMonth = new Date();
+        lastMonth.setMonth(lastMonth.getMonth() - 1);
+        const usersLastMonth = await User.count({ 
+            where: { 
+                isDeleted: false,
+                createdAt: { [require('sequelize').Op.lt]: lastMonth }
+            } 
+        });
+        const userGrowth = usersLastMonth > 0 ? (((totalUsers - usersLastMonth) / usersLastMonth) * 100).toFixed(1) : 0;
+
+        // Get communities
+        const totalCommunities = await Community.count();
+        const activeCommunities = await Community.count({ where: { isVerified: true } });
+        const communitiesLastMonth = await Community.count({ 
+            where: { 
+                createdAt: { [require('sequelize').Op.lt]: lastMonth }
+            } 
+        });
+        const communityGrowth = communitiesLastMonth > 0 ? (((totalCommunities - communitiesLastMonth) / communitiesLastMonth) * 100).toFixed(1) : 0;
+
+        // Get posts
+        const { Post } = require('../models/index');
+        const totalPosts = await Post.count();
+        const postsLastMonth = await Post.count({ 
+            where: { 
+                createdAt: { [require('sequelize').Op.lt]: lastMonth }
+            } 
+        });
+        const postGrowth = postsLastMonth > 0 ? (((totalPosts - postsLastMonth) / postsLastMonth) * 100).toFixed(1) : 0;
+
+        // Get recent users
+        const recentUsers = await User.findAll({
+            where: { isDeleted: false },
+            order: [['createdAt', 'DESC']],
+            limit: 5,
+            attributes: ['id', 'firstName', 'lastName', 'gmail', 'createdAt']
+        });
+
+        // Get recent posts
+        const recentPosts = await Post.findAll({
+            order: [['createdAt', 'DESC']],
+            limit: 5,
+            include: [
+                {
+                    model: User,
+                    as: 'author',
+                    attributes: ['firstName', 'lastName']
+                },
+                {
+                    model: Community,
+                    as: 'community',
+                    attributes: ['name']
+                }
+            ]
+        });
+
+        // Get recent activity
+        const recentActivity = [];
+        
+        // Add recent user registrations
+        const recentRegistrations = await User.findAll({
+            where: { isDeleted: false },
+            order: [['createdAt', 'DESC']],
+            limit: 3,
+            attributes: ['id', 'firstName', 'lastName', 'createdAt']
+        });
+        
+        recentRegistrations.forEach(user => {
+            recentActivity.push({
+                id: `user-${user.id}`,
+                type: 'user_registration',
+                description: 'New user registered',
+                user: `${user.firstName} ${user.lastName}`,
+                timestamp: user.createdAt
+            });
+        });
+
+        // Add recent communities
+        const recentCommunities = await Community.findAll({
+            order: [['createdAt', 'DESC']],
+            limit: 2,
+            attributes: ['id', 'name', 'createdAt'],
+            include: [{
+                model: User,
+                as: 'creator',
+                attributes: ['firstName', 'lastName']
+            }]
+        });
+
+        recentCommunities.forEach(community => {
+            recentActivity.push({
+                id: `community-${community.id}`,
+                type: 'community_created',
+                description: `Created community "${community.name}"`,
+                user: community.creator ? `${community.creator.firstName} ${community.creator.lastName}` : 'Unknown',
+                timestamp: community.createdAt
+            });
+        });
+
+        // Sort by timestamp
+        recentActivity.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                stats: {
+                    totalUsers,
+                    activeUsers,
+                    userGrowth: parseFloat(userGrowth),
+                    activeCommunities,
+                    totalCommunities,
+                    communityGrowth: parseFloat(communityGrowth),
+                    totalPosts,
+                    postGrowth: parseFloat(postGrowth)
+                },
+                recentUsers: recentUsers.map(u => ({
+                    id: u.id,
+                    name: `${u.firstName} ${u.lastName}`,
+                    email: u.gmail,
+                    createdAt: u.createdAt
+                })),
+                recentPosts: recentPosts.map(p => ({
+                    id: p.id,
+                    title: p.title,
+                    author: p.author ? `${p.author.firstName} ${p.author.lastName}` : 'Unknown',
+                    community: p.community ? p.community.name : 'Unknown'
+                })),
+                recentActivity: recentActivity.slice(0, 10)
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching dashboard:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to fetch dashboard data',
+            error: error.message
+        });
+    }
+};
