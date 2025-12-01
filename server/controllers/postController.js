@@ -228,7 +228,40 @@ exports.getUnifiedPosts = async (req, res) => {
 
         // LOGIC 1: HOME PAGE
         if (type === 'HOME') {
-            whereCondition.isVisibleOutsideCommunity = true;
+            if (currentUserId) {
+                // Get user's community memberships
+                const userMemberships = await CommunityMembership.findAll({
+                    where: { userId: currentUserId },
+                    attributes: ['communityId']
+                });
+                
+                // Get communities where user is creator
+                const userCreatedCommunities = await Community.findAll({
+                    where: { creatorUserId: currentUserId, isDeleted: false },
+                    attributes: ['id']
+                });
+                
+                const memberCommunityIds = userMemberships.map(m => m.communityId);
+                const createdCommunityIds = userCreatedCommunities.map(c => c.id);
+                const allUserCommunityIds = [...new Set([...memberCommunityIds, ...createdCommunityIds])];
+                
+                if (allUserCommunityIds.length > 0) {
+                    // Show public posts from all communities OR private posts from user's communities
+                    whereCondition[Op.or] = [
+                        { isVisibleOutsideCommunity: true },
+                        { 
+                            isVisibleOutsideCommunity: false,
+                            communityId: { [Op.in]: allUserCommunityIds }
+                        }
+                    ];
+                } else {
+                    // User is not member of any community, show only public posts
+                    whereCondition.isVisibleOutsideCommunity = true;
+                }
+            } else {
+                // No authenticated user, show only public posts
+                whereCondition.isVisibleOutsideCommunity = true;
+            }
         }
 
         // LOGIC 2: COMMUNITY PAGE

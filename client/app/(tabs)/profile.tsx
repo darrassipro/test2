@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, StatusBar, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { useTranslation } from 'react-i18next';
 import {
   ChevronLeft,
   ChevronRight,
@@ -32,6 +33,7 @@ interface AccountOption {
 }
 
 export default function Profile() {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const { data: communitiesResponse, isLoading } = useGetUserCommunitiesQuery({});
 
@@ -69,14 +71,18 @@ export default function Profile() {
       label: "Personal informations",
       iconComponent: User,
       color: "#000000",
-      onPress: () => {},
+      onPress: () => {
+        router.push('/personal-information');
+      },
     },
     {
       id: "password-security",
-      label: "Password & Security",
+      label: t('profile.password_security'),
       iconComponent: Lock,
       color: "#000000",
-      onPress: () => {},
+      onPress: () => {
+        router.push('/password-security');
+      },
     },
     {
       id: "contact-support",
@@ -87,10 +93,12 @@ export default function Profile() {
     },
     {
       id: "switch-language",
-      label: "Switch Language",
+      label: t('profile.switch_language'),
       iconComponent: Languages,
       color: "#000000",
-      onPress: () => {},
+      onPress: () => {
+        router.push('/language-settings');
+      },
     },
     {
       id: "logout",
@@ -138,7 +146,9 @@ export default function Profile() {
       label: "Personal informations",
       iconComponent: User,
       color: "#1F1F1F",
-      onPress: () => {},
+      onPress: () => {
+        router.push('/personal-information');
+      },
     },
     {
       id: "orders",
@@ -170,10 +180,12 @@ export default function Profile() {
     },
     {
       id: "password-security",
-      label: "Password & Security",
+      label: t('profile.password_security'),
       iconComponent: Lock,
       color: "#1F1F1F",
-      onPress: () => {},
+      onPress: () => {
+        router.push('/password-security');
+      },
     },
     {
       id: "contact-support",
@@ -184,10 +196,12 @@ export default function Profile() {
     },
     {
       id: "switch-language",
-      label: "Switch Language",
+      label: t('profile.switch_language'),
       iconComponent: Languages,
       color: "#1F1F1F",
-      onPress: () => {},
+      onPress: () => {
+        router.push('/language-settings');
+      },
     },
     {
       id: "logout",

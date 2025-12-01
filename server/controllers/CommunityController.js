@@ -253,8 +253,8 @@ exports.getAllCommunities = async (req, res) => {
                 }
             ],
             attributes: [
-                'id', 'name', 'description', 'isVerified', 'totalMembers', 
-                'totalPosts', 'totalProducts', 'isPremium', 'price'
+                'id', 'name', 'description', 'country', 'facebookLink', 'instagramLink', 'whatsappLink',
+                'isVerified', 'totalMembers', 'totalPosts', 'totalProducts', 'isPremium', 'price'
             ]
         });
 
@@ -309,8 +309,8 @@ exports.getCommunity = async (req, res) => {
           });
         const communityInformations = await Community.findByPk(communityId, {
             attributes: [
-                'id', 'name', 'description', 'isVerified', 'totalMembers', 
-                'totalPosts', 'totalProducts', 'isPremium', 'price', 'createdAt'
+                'id', 'name', 'description', 'country', 'facebookLink', 'instagramLink', 'whatsappLink',
+                'isVerified', 'totalMembers', 'totalPosts', 'totalProducts', 'isPremium', 'price', 'createdAt'
             ],
             include: [
                 { 
@@ -341,16 +341,57 @@ exports.getCommunity = async (req, res) => {
 );
         
         if (!isUserMemberShip) {
+            // For non-members, show only public posts
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
+            const offset = (page - 1) * limit;
 
-            const files = communityInformations.communityFiles.map(file => ({
-                url: file.url,
-                type: file.type,
-                isPrincipale: file.isPrincipale
-            }));
+            const { PostLike } = require('../models/index');
+            const { count, rows: publicPosts } = await Post.findAndCountAll({
+                where: { 
+                    communityId: communityId,
+                    status: 'approved',
+                    isVisibleOutsideCommunity: true,
+                    isDeleted: false
+                },
+                limit: limit,
+                offset: offset,
+                order: [['createdAt', 'DESC']],
+                include: [ 
+                    { model: User, as: 'user', attributes: ['id', 'firstName','lastName', 'profileImage'] },
+                    { model: PostCategory, as: 'category', attributes: ['id', 'name'] },
+                    { model: require('../models/index').PostFile, as: 'postFiles', attributes: ['url', 'type'] },
+                    { model: PostLike, as: 'likedBy', attributes: ['userId'] },
+                ]
+            });
+
+            // Get current userId from request (null for non-members)
+            const currentUserId = req.user ? req.user.userId : null;
+
+            // Map posts to add like count and isLiked
+            const postsWithLikes = publicPosts.map(post => {
+                const plain = post.get({ plain: true });
+                const likes = plain.likedBy ? plain.likedBy.length : 0;
+                const isLiked = currentUserId ? plain.likedBy.some(like => like.userId === currentUserId) : false;
+                return {
+                    ...plain,
+                    likes,
+                    isLiked
+                };
+            });
+
+            const paginationInfos = {
+                totalItems: count,
+                totalPages: Math.ceil(count / limit),
+                currentPage: page,
+                pageSize: limit
+            };
 
             return res.status(200).json({
                 success: true,
                 communityInformations: communityData,
+                communityPosts: postsWithLikes,
+                paginationInfos: paginationInfos,
                 isUserMemberShip: false,
                 userRole: null
             });
@@ -440,7 +481,7 @@ exports.getCommunity = async (req, res) => {
  */
 exports.updateCommunity = async (req, res) => {
     const communityId = req.params.id;
-    const { name, description, isPremium, price, filesToDelete, principalFileId } = req.body; 
+    const { name, description, country, facebookLink, instagramLink, whatsappLink, isPremium, price, filesToDelete, principalFileId } = req.body; 
     const { images, videos, audios, virtualTours } = req.files || {};
     const userId = req.user.userId;
     const allUploadedFiles = [];
@@ -468,6 +509,10 @@ if (virtualTours) allUploadedFiles.push(...virtualTours);
         let updateData = {};
         if (name && name.length >= 3) updateData.name = name;
         if (description !== undefined) updateData.description = description;
+        if (country !== undefined) updateData.country = country;
+        if (facebookLink !== undefined) updateData.facebookLink = facebookLink;
+        if (instagramLink !== undefined) updateData.instagramLink = instagramLink;
+        if (whatsappLink !== undefined) updateData.whatsappLink = whatsappLink;
 
         if (isPremium !== undefined) {
             const finalIsPremium = (isPremium === 'true');
@@ -660,8 +705,8 @@ exports.getCommunitiesNotJoined = async (req, res) => {
                 }
             ],
             attributes: [
-                'id', 'name', 'description', 'isVerified', 'totalMembers', 
-                'totalPosts', 'totalProducts', 'isPremium', 'price'
+                'id', 'name', 'description', 'country', 'facebookLink', 'instagramLink', 'whatsappLink',
+                'isVerified', 'totalMembers', 'totalPosts', 'totalProducts', 'isPremium', 'price'
             ]
         });
 
