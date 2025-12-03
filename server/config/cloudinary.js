@@ -368,6 +368,26 @@ const uploadProduct = multer({
    limits: { fileSize: 50 * 1024 * 1024 } 
 });
 
+// Configuration for user profile images
+const userProfileStorage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'ajiw/users/profiles',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif'],
+    transformation: [
+      { width: 800, height: 800, crop: 'limit' },
+      { quality: 'auto:best', fetch_format: 'auto' },
+      { flags: 'lossy' },
+      { bytes: 300000 }
+    ]
+  }
+});
+
+const uploadUserProfile = multer({ 
+  storage: userProfileStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }
+});
+
 module.exports = {
   cloudinary,
   uploadImage,
@@ -387,5 +407,6 @@ module.exports = {
   uploadPoiFile,
   uploadCommunityFiles,
   communityFileStorage,
-  uploadProduct
+  uploadProduct,
+  uploadUserProfile
 };

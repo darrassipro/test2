@@ -73,6 +73,48 @@ export const postApi = api.injectEndpoints({
       }),
       invalidatesTags: ['Post'],
     }),
+
+    toggleLike: builder.mutation({
+      query: (postId: number) => ({
+        url: `/posts/${postId}/like`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['Post'],
+    }),
+
+    toggleSave: builder.mutation({
+      query: (postId: number) => ({
+        url: `/posts/${postId}/toggle-save`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['Post'],
+    }),
+
+    createComment: builder.mutation({
+      query: ({ postId, commentText, replyId }: { postId: number; commentText: string; replyId?: number }) => ({
+        url: `/posts/${postId}/comments`,
+        method: 'POST',
+        body: { commentText, replyId },
+      }),
+      invalidatesTags: ['Post'],
+    }),
+
+    toggleCommentLike: builder.mutation({
+      query: ({ postId, commentId }: { postId: number; commentId: number }) => ({
+        url: `/posts/${postId}/comments/${commentId}/like`,
+        method: 'POST',
+      }),
+      invalidatesTags: ['Post'],
+    }),
+
+    recordShare: builder.mutation({
+      query: ({ postId, shareText }: { postId: number; shareText?: string }) => ({
+        url: `/posts/${postId}/share`,
+        method: 'POST',
+        body: { shareText },
+      }),
+      invalidatesTags: ['Post'],
+    }),
   }),
 });
 
@@ -86,4 +128,9 @@ export const {
   useRejectPostMutation,
   useHidePostMutation,
   useBoostPostMutation,
+  useToggleLikeMutation,
+  useToggleSaveMutation,
+  useCreateCommentMutation,
+  useToggleCommentLikeMutation,
+  useRecordShareMutation,
 } = postApi;

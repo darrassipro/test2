@@ -29,56 +29,11 @@ export const userApi = createApi({
 
     // Mettre à jour le profil utilisateur
     updateUser: builder.mutation({
-      query: (data) => {
-        // Si des fichiers sont présents, utiliser FormData
-        if (data.profileImage || data.banner) {
-          const formData = new FormData();
-          
-          // Ajouter les champs texte
-          Object.keys(data).forEach((key) => {
-            if (key !== 'profileImage' && key !== 'banner' && data[key] !== undefined) {
-              if (typeof data[key] === 'object') {
-                formData.append(key, JSON.stringify(data[key]));
-              } else {
-                formData.append(key, data[key]);
-              }
-            }
-          });
-          
-          // Ajouter les images si présentes
-          if (data.profileImage) {
-            formData.append('profileImage', {
-              uri: data.profileImage.uri,
-              type: data.profileImage.type || 'image/jpeg',
-              name: data.profileImage.name || 'profile.jpg',
-            });
-          }
-          
-          if (data.banner) {
-            formData.append('banner', {
-              uri: data.banner.uri,
-              type: data.banner.type || 'image/jpeg',
-              name: data.banner.name || 'banner.jpg',
-            });
-          }
-          
-          return {
-            url: '/users/update',
-            method: 'PUT',
-            body: formData,
-            headers: {
-              'Content-Type': 'multipart/form-data',
-            },
-          };
-        }
-        
-        // Sinon, envoyer en JSON
-        return {
-          url: '/users/update',
-          method: 'PUT',
-          body: data,
-        };
-      },
+      query: (data) => ({
+        url: '/users/update',
+        method: 'PUT',
+        body: data,
+      }),
       invalidatesTags: ['User'],
     }),
 

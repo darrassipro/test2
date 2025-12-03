@@ -2,6 +2,16 @@ const { User } = require('../models/User');
 const { Op } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const { validationResult } = require('express-validator');
+const { deleteFile } = require('../config/cloudinary');
+
+/**
+ * Generate Cloudinary URL from public ID
+ */
+const getCloudinaryUrl = (publicId) => {
+  if (!publicId) return null;
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  return `https://res.cloudinary.com/${cloudName}/image/upload/${publicId}`;
+};
 
 /**
  * Détermine si le profil d'un utilisateur est entièrement complété.
@@ -206,11 +216,27 @@ const updateUser = async (req, res) => {
       });
     }
 
-    // Si une image de profil est uploadée, elle sera dans req.file (gérée par multer)
-    if (req.file && req.file.path) {
-      updateData.profileImage = req.file.path;
-      if (req.file.public_id) {
-        updateData.cloudinaryImagePublicId = req.file.public_id;
+    // Handle uploaded files from Cloudinary
+    if (req.files) {
+      if (req.files.profileImage && req.files.profileImage[0]) {
+        // Delete old profile image if exists
+        if (user.cloudinaryImagePublicId) {
+          await deleteFile(user.cloudinaryImagePublicId).catch(e => 
+            console.warn('⚠️ Failed to delete old profile image:', e.message)
+          );
+        }
+        updateData.cloudinaryImagePublicId = req.files.profileImage[0].filename || req.files.profileImage[0].public_id;
+        updateData.profileImage = req.files.profileImage[0].path;
+      }
+      if (req.files.banner && req.files.banner[0]) {
+        // Delete old banner if exists
+        if (user.cloudinaryBannerPublicId) {
+          await deleteFile(user.cloudinaryBannerPublicId).catch(e => 
+            console.warn('⚠️ Failed to delete old banner:', e.message)
+          );
+        }
+        updateData.cloudinaryBannerPublicId = req.files.banner[0].filename || req.files.banner[0].public_id;
+        updateData.banner = req.files.banner[0].path;
       }
     }
 
@@ -254,8 +280,6 @@ const completeRegistration = async (req, res) => {
       lastName,
       profileDescription,
       country,
-      profileImage,
-      banner,
       socialMediaLinks,
     } = req.body;
 
@@ -271,13 +295,35 @@ const completeRegistration = async (req, res) => {
 
     const updateData = {};
 
+    // Handle uploaded files from Cloudinary
+    if (req.files) {
+      if (req.files.profileImage && req.files.profileImage[0]) {
+        // Delete old profile image if exists
+        if (user.cloudinaryImagePublicId) {
+          await deleteFile(user.cloudinaryImagePublicId).catch(e => 
+            console.warn('⚠️ Failed to delete old profile image:', e.message)
+          );
+        }
+        updateData.cloudinaryImagePublicId = req.files.profileImage[0].filename || req.files.profileImage[0].public_id;
+        updateData.profileImage = req.files.profileImage[0].path;
+      }
+      if (req.files.banner && req.files.banner[0]) {
+        // Delete old banner if exists
+        if (user.cloudinaryBannerPublicId) {
+          await deleteFile(user.cloudinaryBannerPublicId).catch(e => 
+            console.warn('⚠️ Failed to delete old banner:', e.message)
+          );
+        }
+        updateData.cloudinaryBannerPublicId = req.files.banner[0].filename || req.files.banner[0].public_id;
+        updateData.banner = req.files.banner[0].path;
+      }
+    }
+
     if (typeof firstName !== 'undefined') updateData.firstName = firstName;
     if (typeof lastName !== 'undefined') updateData.lastName = lastName;
     if (typeof profileDescription !== 'undefined')
       updateData.profileDescription = profileDescription;
     if (typeof country !== 'undefined') updateData.country = country;
-    if (typeof profileImage !== 'undefined') updateData.profileImage = profileImage;
-    if (typeof banner !== 'undefined') updateData.banner = banner;
 
     if (typeof socialMediaLinks !== 'undefined') {
       let parsedLinks = socialMediaLinks;

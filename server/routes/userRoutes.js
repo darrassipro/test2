@@ -1,7 +1,7 @@
 const express = require('express');
 const { body } = require('express-validator');
 const { authenticateToken } = require('../middleware/authEnhanced');
-const { uploadImage } = require('../config/cloudinary');
+const { uploadUserProfile } = require('../config/cloudinary');
 
 const {
   getCurrentUser,
@@ -31,9 +31,15 @@ const updatePasswordValidation = [
 UserRouter.get('/me', authenticateToken, getCurrentUser);
 UserRouter.get('/', authenticateToken, getAllUsers);
 UserRouter.get('/:id', authenticateToken, getUserById);
-UserRouter.put('/update', authenticateToken, uploadImage.single('profileImage'), updateUser);
+UserRouter.put('/update', authenticateToken, uploadUserProfile.fields([
+  { name: 'profileImage', maxCount: 1 },
+  { name: 'banner', maxCount: 1 }
+]), updateUser);
 UserRouter.put('/updatePassword', authenticateToken, updatePasswordValidation, updatePassword);
-UserRouter.post('/complete-registration', authenticateToken, completeRegistration);
+UserRouter.post('/complete-registration', authenticateToken, uploadUserProfile.fields([
+  { name: 'profileImage', maxCount: 1 },
+  { name: 'banner', maxCount: 1 }
+]), completeRegistration);
 UserRouter.delete('/delete', authenticateToken, deleteUser);
 
 module.exports = { userRouter: UserRouter };

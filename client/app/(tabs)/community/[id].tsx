@@ -1,10 +1,10 @@
 import { useState, useMemo } from "react";
 import { View, Text, ScrollView, StatusBar, Image, TouchableOpacity, ActivityIndicator, Alert, Modal, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ChevronLeft, Settings, Home, ShoppingBag, MapPin, Edit, Building2, ChefHat, Bike, ImagePlus, Video, Orbit } from "lucide-react-native";
+import { ChevronLeft, Settings, Home, ShoppingBag, MapPin, Edit, Building2, ChefHat, Bike, ImagePlus, Video, Orbit, Info, UserRoundPlus, Check, Calendar, Facebook, Twitter, Instagram, MessageCircle } from "lucide-react-native";
 import { useLocalSearchParams, router } from "expo-router";
 import { useApprovePostMutation, useRejectPostMutation, useTogglePostLikeMutation } from '@/services/postApi';
-import { communityApi } from '@/services/communityApi';
+import { communityApi, useJoinCommunityMutation } from '@/services/communityApi';
 import Toast from 'react-native-toast-message';
 import { useAppDispatch } from '@/lib/hooks';
 import PostCard from "@/components/feed/PostCard";
@@ -14,7 +14,7 @@ import { useEffect, useRef } from 'react';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import MembersModal from '@/components/community/MembersModal';
 import emitter from '@/lib/eventEmitter';
-
+import { getFileByRole } from '@/utils/helpers';
 const categories = [
   { id: 1, name: "Riad", icon: Building2 },
   { id: 2, name: "Restaurant", icon: ChefHat },
@@ -22,7 +22,6 @@ const categories = [
   { id: 4, name: "Hotels", icon: Building2 },
   { id: 5, name: "Cafes", icon: ChefHat },
 ];
-
 export default function CommunityDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const communityId = id as string | undefined;
@@ -37,10 +36,10 @@ export default function CommunityDetails() {
   const communityPosts = data?.communityPosts || [];
   const isUserMemberShip = data?.isUserMemberShip;
   const userRole = data?.userRole || null;
-
   const [approvePost] = useApprovePostMutation();
   const [rejectPost] = useRejectPostMutation();
   const [togglePostLike] = useTogglePostLikeMutation();
+  const [joinCommunity] = useJoinCommunityMutation();
   const dispatch = useAppDispatch();
   const navigation = useNavigation();
 
@@ -51,13 +50,13 @@ export default function CommunityDetails() {
   const [rejectReason, setRejectReason] = useState('');
   const [activeTab, setActiveTab] = useState("Feed");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [isJoining, setIsJoining] = useState(false);
 
   const [localPosts, setLocalPosts] = useState<any[]>(communityPosts);
 
   useEffect(() => {
     setLocalPosts(communityPosts);
   }, [communityPosts]);
-
   // Refetch community data when screen is focused (e.g., after creating a post)
   const refetchRef = useRef(refetch);
   refetchRef.current = refetch;
@@ -70,26 +69,21 @@ export default function CommunityDetails() {
       };
     }, [communityId])
   );
-
   if (data) console.log('GetCommunity data received', { data });
-
   const resolveImageSource = (maybeUrlOrRequire: any) => {
     if (typeof maybeUrlOrRequire === 'string' && maybeUrlOrRequire.length > 0) {
       return { uri: maybeUrlOrRequire };
     }
     return images.bg;
   };
-
   function formatCount(num: number): string {
     if (num >= 1e6) return `${(num / 1e6).toFixed(1)}M`.replace(/\.0$/, "");
     if (num >= 1e3) return `${(num / 1e3).toFixed(1)}K`.replace(/\.0$/, "");
     return String(num);
   }
-
   useEffect(() => {
     if (!communityId) return;
   }, [communityId]);
-
   if (isLoading) {
     return (
       <SafeAreaView className="flex-1 bg-white" edges={["top"]}>
@@ -99,7 +93,6 @@ export default function CommunityDetails() {
       </SafeAreaView>
     );
   }
-
   if (error || !community) {
     console.log('GetCommunity error', error);
     const serverMessage = (error as any)?.data?.message || (error as any)?.error || (error as any)?.status || null;
@@ -115,6 +108,31 @@ export default function CommunityDetails() {
 
   const isModerator = isUserMemberShip && userRole && ['owner','admin','moderator'].includes(userRole);
 
+  const handleJoinCommunity = async () => {
+    if (!communityId || isJoining) return;
+
+    setIsJoining(true);
+    try {
+      await joinCommunity(communityId).unwrap();
+      Toast.show({
+        type: 'success',
+        text1: 'Joined successfully!',
+        text2: 'You are now a member of this community.'
+      });
+      // Refetch community data to update membership status
+      refetch();
+    } catch (error: any) {
+      console.error('Join community failed:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Join failed',
+        text2: error?.data?.message || error?.message || 'Unable to join community'
+      });
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
   const handleLike = async (postId: any) => {
     let changedPost: any = null;
     setLocalPosts((prev) =>
@@ -128,7 +146,6 @@ export default function CommunityDetails() {
         return post;
       })
     );
-
     // Emit like change event for global feed sync
     if (changedPost && changedPost.isVisibleOutsideCommunity) {
       emitter.emit('postLikeChanged', {
@@ -137,7 +154,6 @@ export default function CommunityDetails() {
         likes: changedPost.likes,
       });
     }
-
     try {
       await togglePostLike(postId).unwrap();
       try {
@@ -158,7 +174,6 @@ export default function CommunityDetails() {
       console.warn('Like failed', e);
     }
   };
-
   return (
     <>
       <SafeAreaView className="flex-1 bg-white" edges={["top"]} style={{ backgroundColor: '#FFFFFF' }}>
@@ -212,26 +227,26 @@ export default function CommunityDetails() {
             <Settings size={24} color="#000000" />
           </TouchableOpacity>
         </View>
-
         <View className="flex-1">
           <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
             {/* Banner and Profile Image */}
             {(() => {
-
               const files = community?.communityFiles || [];
+              const avatarUrl =  getFileByRole(community.communityFiles, 'avatar') || 'https://via.placeholder.com/150';
+              const bannerUrl = getFileByRole(community.communityFiles, 'banner') || 'https://via.placeholder.com/300';
               const avatarFile = files.find((f: any) => f.role === 'avatar');
               const bannerFile = files.find((f: any) => f.isPrincipale && f.role === 'banner');
               const extraFiles = files.filter((f: any) => {
                 if (avatarFile && f.url === avatarFile.url) return false;
                 return !f.isPrincipale && (!bannerFile || f.url !== bannerFile.url);
               });
-
               return (
                 <View style={{ position: 'relative', marginTop: 25 }}>
                   {/* Banner */}
-                  {bannerFile ? (
+                  {bannerUrl ? (
                     <Image
-                      source={resolveImageSource(bannerFile.url)}
+                      key={`banner-${communityId}-${bannerUrl}`}
+                      source={resolveImageSource(bannerUrl)}
                       style={{
                         width: '100%',
                         height: 191,
@@ -260,7 +275,8 @@ export default function CommunityDetails() {
                     backgroundColor: '#D9D9D9'
                   }}>
                     <Image
-                      source={resolveImageSource(avatarFile?.url || community?.creator?.profileImage)}
+                      key={`avatar-${communityId}-${avatarUrl}`}
+                      source={resolveImageSource(avatarUrl)}
                       style={{ width: '100%', height: '100%' }}
                       resizeMode="cover"
                     />
@@ -268,7 +284,6 @@ export default function CommunityDetails() {
                 </View>
               );
             })()}
-
             {/* Profile Info*/}
             <View style={{ 
               marginTop: 52,
@@ -292,10 +307,38 @@ export default function CommunityDetails() {
                 }}>
                   {community.name}
                 </Text>
-
-                <TouchableOpacity>
-                  <Edit size={18} color="#666" />
-                </TouchableOpacity>
+                {userRole === 'owner' && (
+                  <TouchableOpacity onPress={() => router.push(`/edit-community?id=${communityId}`)}>
+                    <Edit size={18} color="#666" />
+                  </TouchableOpacity>
+                )}
+                
+                {/* Join/Joined Community Button */}
+                {!isUserMemberShip ? (
+                  <TouchableOpacity 
+                    onPress={handleJoinCommunity}
+                    disabled={isJoining} 
+                    className="px-4 py-1.5 rounded-full flex-row items-center gap-1"
+                    style={{
+                      backgroundColor: '#FFF5F7'
+                    }}
+                  >
+                    <UserRoundPlus size={18} color="#E72858" />
+                    <Text className="text-[#E72858] text-sm ml-1 font-semibold">
+                      {isJoining ? 'Joining...' : 'Join Community'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : userRole !== 'owner' && (
+                  <View 
+                    className="px-4 py-1.5 rounded-full flex-row items-center gap-1"
+                    style={{
+                      backgroundColor: '#E8F5E9'
+                    }}
+                  >
+                    <Check size={18} color="#4CAF50" />
+                    <Text className="text-[#4CAF50] text-sm ml-1 font-semibold">Joined</Text>
+                  </View>
+                )}       
               </View>
               {/* Description */}
               <Text style={{
@@ -309,7 +352,6 @@ export default function CommunityDetails() {
               }}>
                 {community.description}
               </Text>
-
               {/* Stats */}
               <View style={{ 
                 flexDirection: 'row',
@@ -369,23 +411,29 @@ export default function CommunityDetails() {
                 </View>
               </View>
             </View>
-
             {/* Navigation Tabs  */}
             <View style={{ 
               marginTop: 42,
               paddingHorizontal: 15,
               marginBottom: 16
             }}>
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: '#FFFFFF',
-                borderWidth: 0.75,
-                borderColor: '#EEEEEE',
-                borderRadius: 90,
-                paddingVertical: 4.5,
-                paddingHorizontal: 16
-              }}>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{
+                  flexGrow: 0
+                }}
+              >
+                <View style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#FFFFFF',
+                  borderWidth: 0.75,
+                  borderColor: '#EEEEEE',
+                  borderRadius: 90,
+                  paddingVertical: 4.5,
+                  paddingHorizontal: 16
+                }}>
                 {/* Feed Tab */}
                 <TouchableOpacity
                   onPress={() => setActiveTab("Feed")}
@@ -410,9 +458,7 @@ export default function CommunityDetails() {
                     Feed
                   </Text>
                 </TouchableOpacity>
-
                 <View style={{ width: 0, height: 18.38, borderLeftWidth: 0.75, borderColor: '#DBDBDB' }} />
-
                 {/* Shop Tab */}
                 <TouchableOpacity
                   onPress={() => setActiveTab("Shop")}
@@ -437,9 +483,7 @@ export default function CommunityDetails() {
                     Shop
                   </Text>
                 </TouchableOpacity>
-
                 <View style={{ width: 0, height: 18.38, borderLeftWidth: 0.75, borderColor: '#DBDBDB' }} />
-
                 {/* Trajets Tab */}
                 <TouchableOpacity
                   onPress={() => setActiveTab("Trajets")}
@@ -464,15 +508,41 @@ export default function CommunityDetails() {
                     Trajets
                   </Text>
                 </TouchableOpacity>
-              </View>
-            </View>
+                <View style={{ width: 0, height: 18.38, borderLeftWidth: 0.75, borderColor: '#DBDBDB' }} />
 
+                {/* About Tab */}
+                <TouchableOpacity
+                  onPress={() => setActiveTab("About")}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingVertical: 6.75,
+                    paddingHorizontal: 18,
+                    gap: 6,
+                    borderBottomWidth: activeTab === "About" ? 2.25 : 0,
+                    borderBottomColor: '#E72858'
+                  }}
+                >
+                  <Info size={18} color={activeTab === "About" ? "#E72858" : "#1F1F1F"} strokeWidth={1.5} />
+                  <Text style={{
+                    fontSize: 13.5,
+                    fontWeight: activeTab === "About" ? '600' : '500',
+                    lineHeight: 28,
+                    color: activeTab === "About" ? "#E72858" : "#1F1F1F"
+                  }}>
+                    About
+                  </Text>
+                </TouchableOpacity>
+                
+              </View>
+              </ScrollView>
+            </View>
             {/* Feed Content */}
             {activeTab === "Feed" && (
               <>
 {/* Carousel of extra files (images/videos) */}
                 {(() => {
-
                   const files = community?.communityFiles || [];
                   const avatarFile = files.find((f: any) => f.role === 'avatar');
                   const bannerFile = files.find((f: any) => f.isPrincipale && f.role === 'banner');
@@ -480,7 +550,6 @@ export default function CommunityDetails() {
                     if (avatarFile && f.url === avatarFile.url) return false;
                     return !f.isPrincipale && (!bannerFile || f.url !== bannerFile.url);
                   });
-
                   return (
                     extraFiles.length > 0 && (
                       <ScrollView 
@@ -514,7 +583,6 @@ export default function CommunityDetails() {
                     )
                   );
                 })()}
-
                 {/* Pending posts for moderators - AT THE TOP */}
                 {isModerator && localPosts.filter((p: any) => p.status === 'pending').length > 0 && (
                   <View style={{ marginTop: 8, paddingHorizontal: 15, marginBottom: 24 }}>
@@ -579,7 +647,6 @@ export default function CommunityDetails() {
                               </Text>
                             )}
                           </TouchableOpacity>
-
                           <TouchableOpacity
                             style={{
                               flexDirection: 'row',
@@ -649,7 +716,6 @@ export default function CommunityDetails() {
                     ))}
                   </View>
                 )}
-
                 {/* Composer - Create Post */}
                 {isUserMemberShip && (
                   <View style={{ 
@@ -724,6 +790,9 @@ export default function CommunityDetails() {
                 )}
 
                 {/* All Posts header */}
+
+
+                {/* Posts header */}
                 <View style={{ 
                   paddingHorizontal: 15,
                   marginTop: 8,
@@ -735,7 +804,8 @@ export default function CommunityDetails() {
                     lineHeight: 27,
                     color: '#1F1F1F'
                   }}>
-                    All Posts
+                    
+                    {isUserMemberShip ? 'All Posts' : 'Public Posts'}
                   </Text>
                 </View>
 
@@ -772,13 +842,11 @@ export default function CommunityDetails() {
                     </View>
                   </ScrollView>
                 </View>
-
                 {/* Posts Feed - Approved Posts */}
                 <View style={{ paddingBottom: 100 }}>
                   {localPosts.filter((p: any) => p.status === 'approved').map((post: any) => (
                     <PostCard key={post.id} post={post} onLike={handleLike} />
                   ))}
-
                   {/* Reject reason modal */}
                   <Modal
                     visible={showRejectModal}
@@ -853,10 +921,297 @@ export default function CommunityDetails() {
                 </View>
               </>
             )}
+              {/* Shop Content */}
+            {activeTab === "Shop" && (
+              <View style={{ paddingHorizontal: 15, paddingBottom: 100 }}>
+                <View style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 12,
+                  padding: 20,
+                  marginBottom: 16,
+                  alignItems: 'center'
+                }}>
+                  <ShoppingBag size={48} color="#E0E0E0" strokeWidth={1.5} />
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '600',
+                    color: '#1F1F1F',
+                    marginTop: 12,
+                    marginBottom: 8
+                  }}>
+                    Shop Coming Soon
+                  </Text>
+                  <Text style={{
+                    fontSize: 14,
+                    color: '#666',
+                    textAlign: 'center',
+                    lineHeight: 20
+                  }}>
+                    The community shop feature is currently under development. Stay tuned for updates!
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Trajets Content */}
+            {activeTab === "Trajets" && (
+              <View style={{ paddingHorizontal: 15, paddingBottom: 100 }}>
+                <View style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 12,
+                  padding: 20,
+                  marginBottom: 16,
+                  alignItems: 'center'
+                }}>
+                  <MapPin size={48} color="#E0E0E0" strokeWidth={1.5} />
+                  <Text style={{
+                    fontSize: 16,
+                    fontWeight: '600',
+                    color: '#1F1F1F',
+                    marginTop: 12,
+                    marginBottom: 8
+                  }}>
+                    Trajets Coming Soon
+                  </Text>
+                  <Text style={{
+                    fontSize: 14,
+                    color: '#666',
+                    textAlign: 'center',
+                    lineHeight: 20
+                  }}>
+                    The community trajets feature is currently under development. Stay tuned for updates!
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* About Content */}
+            {activeTab === "About" && (
+              <View style={{ paddingHorizontal: 15, paddingBottom: 100, gap: 24 }}>
+                {/* Title */}
+                <Text style={{
+                  fontSize: 18,
+                  fontWeight: '600',
+                  lineHeight: 22,
+                  color: '#000000'
+                }}>
+                  About Community
+                </Text>
+
+                {/* Creator Info and Description */}
+                <View style={{ gap: 16 }}>
+                  {/* Creator Profile */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {(() => {
+                      const files = community?.communityFiles || [];
+                      const avatarFile = files.find((f: any) => f.role === 'avatar');
+                      return (
+                        <Image
+                          source={resolveImageSource(avatarFile?.url || community?.creator?.profileImage)}
+                          style={{
+                            width: 56,
+                            height: 56,
+                            borderRadius: 28,
+                            backgroundColor: '#D9D9D9'
+                          }}
+                          resizeMode="cover"
+                        />
+                      );
+                    })()}
+                    <View style={{ gap: 4 }}>
+                      <Text style={{
+                        fontSize: 16,
+                        fontWeight: '600',
+                        lineHeight: 19,
+                        color: '#000000',
+                        textAlign: 'center'
+                      }}>
+                        {community?.name || 'Community'}
+                      </Text>
+                      <Text style={{
+                        fontSize: 14,
+                        fontWeight: '500',
+                        lineHeight: 17,
+                        color: '#5B5B5B',
+                        textAlign: 'center'
+                      }}>
+                        {formatCount(community?.totalMembers || 0)} Followers
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Description */}
+                  <Text style={{
+                    fontSize: 14,
+                    fontWeight: '400',
+                    lineHeight: 23.24,
+                    color: '#000000'
+                  }}>
+                    {community?.description}
+                  </Text>
+                </View>
+
+                {/* Info Card */}
+                <View style={{
+                  backgroundColor: '#F4F4F4',
+                  borderRadius: 23.68,
+                  padding: 19,
+                  gap: 16
+                }}>
+                  {/* Social Links */}
+                  {(community?.facebookLink || community?.instagramLink || community?.whatsappLink) && (
+                    <View style={{ gap: 10.15 }}>
+                      <Text style={{
+                        fontSize: 13.53,
+                        fontWeight: '500',
+                        lineHeight: 21,
+                        color: '#5B5B5B'
+                      }}>
+                        Social links
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 12.52 }}>
+                        {community?.facebookLink && (
+                          <TouchableOpacity 
+                            onPress={() => {
+                              // Open Facebook link
+                              const url = community.facebookLink.startsWith('http') ? community.facebookLink : `https://${community.facebookLink}`;
+                              console.log('Opening Facebook:', url);
+                            }}
+                            style={{
+                              width: 50.1,
+                              height: 50.1,
+                              borderRadius: 25.05,
+                              backgroundColor: '#FFFFFF',
+                              justifyContent: 'center',
+                              alignItems: 'center'
+                            }}
+                          >
+                            <Facebook size={22.54} color="#000000" fill="#000000" />
+                          </TouchableOpacity>
+                        )}
+                        {community?.instagramLink && (
+                          <TouchableOpacity 
+                            onPress={() => {
+                              // Open Instagram link
+                              const url = community.instagramLink.startsWith('http') ? community.instagramLink : `https://${community.instagramLink}`;
+                              console.log('Opening Instagram:', url);
+                            }}
+                            style={{
+                              width: 50.1,
+                              height: 50.1,
+                              borderRadius: 25.05,
+                              backgroundColor: '#FFFFFF',
+                              justifyContent: 'center',
+                              alignItems: 'center'
+                            }}
+                          >
+                            <Instagram size={22.54} color="#000000" />
+                          </TouchableOpacity>
+                        )}
+                        {community?.whatsappLink && (
+                          <TouchableOpacity 
+                            onPress={() => {
+                              // Open WhatsApp link
+                              const url = community.whatsappLink.startsWith('http') ? community.whatsappLink : `https://wa.me/${community.whatsappLink}`;
+                              console.log('Opening WhatsApp:', url);
+                            }}
+                            style={{
+                              width: 50.1,
+                              height: 50.1,
+                              borderRadius: 25.05,
+                              backgroundColor: '#FFFFFF',
+                              justifyContent: 'center',
+                              alignItems: 'center'
+                            }}
+                          >
+                            <MessageCircle size={22.54} color="#000000" strokeWidth={2} />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Members Count */}
+                  <Text style={{
+                    fontSize: 16.91,
+                    fontWeight: '700',
+                    lineHeight: 27,
+                    color: '#000000'
+                  }}>
+                    {formatCount(community?.totalMembers || 0)} Members
+                  </Text>
+
+                  {/* Location */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6.76 }}>
+                    <MapPin size={20.29} color="#1F1F1F" strokeWidth={1.69} />
+                    <Text style={{
+                      fontSize: 13.53,
+                      fontWeight: '500',
+                      lineHeight: 21,
+                      color: '#1F1F1F'
+                    }}>
+                      {community?.location || 'Rabat, Morocco'}
+                    </Text>
+                  </View>
+
+                  {/* Member Since */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6.76 }}>
+                    <Calendar size={20.29} color="#1F1F1F" strokeWidth={1.69} />
+                    <Text style={{
+                      fontSize: 13.53,
+                      fontWeight: '500',
+                      lineHeight: 21,
+                      color: '#1F1F1F'
+                    }}>
+                      Member Since {community?.createdAt ? new Date(community.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'Dec 2025'}
+                    </Text>
+                  </View>
+
+                  {/* Products and Posts */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 50.74 }}>
+                    <Text style={{
+                      fontSize: 16.91,
+                      fontWeight: '700',
+                      lineHeight: 27,
+                      color: '#000000'
+                    }}>
+                      {community?.totalProducts || 0} Products
+                    </Text>
+                    <Text style={{
+                      fontSize: 16.91,
+                      fontWeight: '700',
+                      lineHeight: 27,
+                      color: '#000000'
+                    }}>
+                      {localPosts.filter((p: any) => p.status === 'approved').length} Posts
+                    </Text>
+                  </View>
+
+                  {/* Trajets and Sponsors */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 67.65 }}>
+                    <Text style={{
+                      fontSize: 16.91,
+                      fontWeight: '700',
+                      lineHeight: 27,
+                      color: '#000000'
+                    }}>
+                      19 Trajets
+                    </Text>
+                    <Text style={{
+                      fontSize: 16.91,
+                      fontWeight: '700',
+                      lineHeight: 27,
+                      color: '#000000'
+                    }}>
+                      7 Sponsors
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
           </ScrollView>
         </View>
       </SafeAreaView>
-
       <MembersModal
         visible={showMembersModal}
         onClose={() => setShowMembersModal(false)}

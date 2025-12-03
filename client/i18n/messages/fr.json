@@ -1,0 +1,46 @@
+{
+  "common": {
+    "ok": "OK",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "back": "Retour",
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "success": "Succès"
+  },
+  "language": {
+    "title": "Langue",
+    "changed": "Langue Modifiée",
+    "changed_message": "La langue de l'application a été mise à jour avec succès. Certains changements peuvent nécessiter un redémarrage de l'application.",
+    "error_message": "Échec de la sauvegarde de la préférence de langue. Veuillez réessayer.",
+    "info": "Changer la langue mettra à jour l'interface de l'application. Certains contenus peuvent encore apparaître dans la langue d'origine jusqu'au redémarrage de l'application.",
+    "english": "Anglais",
+    "french": "Français",
+    "arabic": "Arabe"
+  },
+  "password": {
+    "title": "Mot de Passe et Sécurité",
+    "old_password": "Ancien Mot de Passe",
+    "new_password": "Nouveau Mot de Passe",
+    "confirm_password": "Confirmer le Mot de Passe",
+    "old_password_placeholder": "Entrez votre mot de passe actuel",
+    "new_password_placeholder": "Entrez votre nouveau mot de passe",
+    "confirm_password_placeholder": "Confirmez votre nouveau mot de passe",
+    "change_success": "Mot de Passe Modifié avec Succès",
+    "change_success_message": "Votre mot de passe a été mis à jour avec succès.",
+    "change_error": "Échec de la Modification du Mot de Passe",
+    "validation": {
+      "required": "Ce champ est obligatoire",
+      "min_length": "Le mot de passe doit contenir au moins 8 caractères",
+      "uppercase": "Le mot de passe doit contenir au moins une lettre majuscule",
+      "lowercase": "Le mot de passe doit contenir au moins une lettre minuscule",
+      "number": "Le mot de passe doit contenir au moins un chiffre",
+      "special_char": "Le mot de passe doit contenir au moins un caractère spécial",
+      "passwords_match": "Les mots de passe ne correspondent pas"
+    }
+  },
+  "profile": {
+    "switch_language": "Changer de Langue",
+    "password_security": "Mot de Passe et Sécurité"
+  }
+}

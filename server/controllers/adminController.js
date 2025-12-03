@@ -1,4 +1,4 @@
-const { Community, Admin, User, CommunityMembership } = require('../models/index');
+const { Community, Admin, User, CommunityMembership, Post } = require('../models/index');
 const { getUserRole } = require('../middleware/checkAdminRole'); 
 
 /**
@@ -302,7 +302,7 @@ exports.getDashboard = async (req, res) => {
             include: [
                 {
                     model: User,
-                    as: 'author',
+                    as: 'user',
                     attributes: ['firstName', 'lastName']
                 },
                 {
@@ -381,7 +381,7 @@ exports.getDashboard = async (req, res) => {
                 recentPosts: recentPosts.map(p => ({
                     id: p.id,
                     title: p.title,
-                    author: p.author ? `${p.author.firstName} ${p.author.lastName}` : 'Unknown',
+                    author: p.user ? `${p.user.firstName} ${p.user.lastName}` : 'Unknown',
                     community: p.community ? p.community.name : 'Unknown'
                 })),
                 recentActivity: recentActivity.slice(0, 10)
@@ -393,6 +393,390 @@ exports.getDashboard = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: 'Failed to fetch dashboard data',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * @description Get platform analytics data
+ * @access Private (Admin only)
+ */
+exports.getAnalytics = async (req, res) => {
+    try {
+        const { timeRange = '30d' } = req.query;
+        
+        // Calculate date range
+        const endDate = new Date();
+        const startDate = new Date();
+        
+        switch (timeRange) {
+            case '7d':
+                startDate.setDate(startDate.getDate() - 7);
+                break;
+            case '30d':
+                startDate.setDate(startDate.getDate() - 30);
+                break;
+            case '90d':
+                startDate.setDate(startDate.getDate() - 90);
+                break;
+            case '1y':
+                startDate.setFullYear(startDate.getFullYear() - 1);
+                break;
+            default:
+                startDate.setDate(startDate.getDate() - 30);
+        }
+
+        const { Op } = require('sequelize');
+        
+        // Get metrics for the time range
+        const users = await User.count({
+            where: {
+                isDeleted: false,
+                createdAt: { [Op.between]: [startDate, endDate] }
+            }
+        });
+
+        const communities = await Community.count({
+            where: {
+                createdAt: { [Op.between]: [startDate, endDate] }
+            }
+        });
+
+        const posts = await Post.count({
+            where: {
+                createdAt: { [Op.between]: [startDate, endDate] }
+            }
+        });
+
+        // Simple overview data
+        const overview = [
+            { title: 'New Users', value: users.toString(), trend: 'up', change: `+${users} in period` },
+            { title: 'New Communities', value: communities.toString(), trend: 'up', change: `+${communities} in period` },
+            { title: 'New Posts', value: posts.toString(), trend: 'up', change: `+${posts} in period` },
+            { title: 'Total Active', value: (users + communities).toString(), trend: 'up', change: 'Period activity' }
+        ];
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                timeRange,
+                overview,
+                metrics: {
+                    users: { total: users, new: users, active: users, growth: 0 },
+                    communities: { total: communities, new: communities, active: communities, growth: 0 },
+                    posts: { total: posts, new: posts, growth: 0 }
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching analytics:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to fetch analytics data',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * @description Get content reports
+ * @access Private (Admin only)
+ */
+exports.getReports = async (req, res) => {
+    try {
+        // Return empty reports for now - needs Report model to be created
+        return res.status(200).json({
+            success: true,
+            data: {
+                reports: [],
+                stats: {
+                    total: 0,
+                    pending: 0,
+                    resolved: 0,
+                    critical: 0,
+                    underReview: 0
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching reports:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to fetch reports',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * @description Approve a report
+ * @access Private (Admin only)
+ */
+exports.approveReport = async (req, res) => {
+    try {
+        const { reportId } = req.params;
+        
+        return res.status(200).json({
+            success: true,
+            message: 'Report approved successfully',
+            data: { reportId }
+        });
+    } catch (error) {
+        console.error('Error approving report:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to approve report',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * @description Reject a report
+ * @access Private (Admin only)
+ */
+exports.rejectReport = async (req, res) => {
+    try {
+        const { reportId } = req.params;
+        
+        return res.status(200).json({
+            success: true,
+            message: 'Report rejected successfully',
+            data: { reportId }
+        });
+    } catch (error) {
+        console.error('Error rejecting report:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to reject report',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * @description Dismiss a report
+ * @access Private (Admin only)
+ */
+exports.dismissReport = async (req, res) => {
+    try {
+        const { reportId } = req.params;
+        
+        return res.status(200).json({
+            success: true,
+            message: 'Report dismissed successfully',
+            data: { reportId }
+        });
+    } catch (error) {
+        console.error('Error dismissing report:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to dismiss report',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * @description Get platform settings
+ * @access Private (Admin only)
+ */
+exports.getSettings = async (req, res) => {
+    try {
+        // Return default settings - can be stored in database later
+        const settings = {
+            general: {
+                siteName: 'Ajiw Platform',
+                siteDescription: 'Community platform',
+                maintenanceMode: false
+            },
+            security: {
+                passwordMinLength: 8,
+                requireEmailVerification: true,
+                maxLoginAttempts: 5
+            },
+            features: {
+                enableCommunities: true,
+                enablePosts: true,
+                enableProducts: true,
+                enableRoutes: true
+            },
+            notifications: {
+                emailNotifications: true,
+                pushNotifications: false,
+                smsNotifications: false
+            }
+        };
+
+        return res.status(200).json({
+            success: true,
+            data: settings
+        });
+    } catch (error) {
+        console.error('Error fetching settings:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to fetch settings',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * @description Update platform settings
+ * @access Private (Admin only)
+ */
+exports.updateSettings = async (req, res) => {
+    try {
+        const { section, settings } = req.body;
+        
+        // In a real implementation, save to database
+        return res.status(200).json({
+            success: true,
+            message: 'Settings updated successfully',
+            data: { section, settings }
+        });
+    } catch (error) {
+        console.error('Error updating settings:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to update settings',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * @description Get all creators/users with pagination and filters
+ * @access Private (Admin only)
+ */
+exports.getCreators = async (req, res) => {
+    try {
+        const { 
+            page = 1, 
+            limit = 10, 
+            status = 'all',
+            search = '',
+            sortBy = 'createdAt',
+            sortOrder = 'DESC'
+        } = req.query;
+
+        const offset = (parseInt(page) - 1) * parseInt(limit);
+        const { Op } = require('sequelize');
+
+        // Build where clause
+        const where = { isDeleted: false };
+
+        // Filter by status
+        if (status === 'active') {
+            where.isActive = true;
+        } else if (status === 'suspended') {
+            where.isActive = false;
+        }
+
+        // Search by name or email
+        if (search) {
+            where[Op.or] = [
+                { firstName: { [Op.like]: `%${search}%` } },
+                { lastName: { [Op.like]: `%${search}%` } },
+                { gmail: { [Op.like]: `%${search}%` } }
+            ];
+        }
+
+        // Get users with community count
+        const { count, rows: users } = await User.findAndCountAll({
+            where,
+            limit: parseInt(limit),
+            offset,
+            order: [[sortBy, sortOrder]],
+            attributes: [
+                'id', 
+                'firstName', 
+                'lastName', 
+                'gmail', 
+                'profileImage',
+                'country',
+                'totalFollowers',
+                'totalCommunities',
+                'isActive',
+                'isVerified',
+                'createdAt'
+            ]
+        });
+
+        // Format response
+        const creators = users.map(user => ({
+            id: user.id,
+            name: `${user.firstName} ${user.lastName}`,
+            email: user.gmail,
+            avatar: user.profileImage,
+            dateJoined: user.createdAt,
+            communities: user.totalCommunities || 0,
+            followers: user.totalFollowers?.toLocaleString() || '0',
+            city: user.country || 'N/A',
+            status: user.isActive ? 'active' : 'suspended',
+            isVerified: user.isVerified
+        }));
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                creators,
+                pagination: {
+                    total: count,
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    totalPages: Math.ceil(count / parseInt(limit))
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching creators:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to fetch creators',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * @description Update user status (activate/suspend)
+ * @access Private (Admin only)
+ */
+exports.updateUserStatus = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { status } = req.body; // 'active' or 'suspended'
+
+        const user = await User.findByPk(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        user.isActive = status === 'active';
+        await user.save();
+
+        return res.status(200).json({
+            success: true,
+            message: `User ${status === 'active' ? 'activated' : 'suspended'} successfully`,
+            data: {
+                id: user.id,
+                status: user.isActive ? 'active' : 'suspended'
+            }
+        });
+
+    } catch (error) {
+        console.error('Error updating user status:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to update user status',
             error: error.message
         });
     }

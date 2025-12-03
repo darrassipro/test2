@@ -4,6 +4,15 @@ const { User } = require('../models/User');
 const { Op } = require('sequelize');
 
 /**
+ * Generate Cloudinary URL from public ID
+ */
+const getCloudinaryUrl = (publicId) => {
+  if (!publicId) return null;
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  return `https://res.cloudinary.com/${cloudName}/image/upload/${publicId}`;
+};
+
+/**
  * Récupère la dernière story de chaque utilisateur (une seule story par utilisateur)
  * GET /stories
  */
@@ -127,7 +136,7 @@ const getStoryById = async (req, res) => {
         {
           model: User,
           as: 'user',
-          attributes: ['id', 'firstName', 'lastName', 'profileImage'],
+          attributes: ['id', 'firstName', 'lastName', 'cloudinaryImagePublicId'],
         },
         {
           model: StoryView,
@@ -137,7 +146,7 @@ const getStoryById = async (req, res) => {
             {
               model: User,
               as: 'viewer',
-              attributes: ['id', 'firstName', 'lastName', 'profileImage'],
+              attributes: ['id', 'firstName', 'lastName', 'cloudinaryImagePublicId'],
             },
           ],
         },

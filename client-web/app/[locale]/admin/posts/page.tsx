@@ -244,8 +244,8 @@ export default function PostsPage() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell>{post.author}</TableCell>
-                  <TableCell>{post.community}</TableCell>
+                  <TableCell>{typeof post.author === 'object' ? (post.author as any)?.name || `${(post.author as any)?.firstName || ''} ${(post.author as any)?.lastName || ''}`.trim() : post.author}</TableCell>
+                  <TableCell>{typeof post.community === 'object' ? (post.community as any)?.name : post.community}</TableCell>
                   <TableCell>{getStatusBadge(post.status)}</TableCell>
                   <TableCell>{post.visibility ? getVisibilityBadge(post.visibility) : '-'}</TableCell>
                   <TableCell>

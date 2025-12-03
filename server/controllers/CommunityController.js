@@ -3,6 +3,16 @@ const { getUserRole } = require('../middleware/checkAdminRole');
 const { deleteFile } = require('../config/cloudinary');
 const sequelize = require('sequelize'); 
 const { Op, literal } = require('sequelize');
+
+/**
+ * Generate Cloudinary URL from public ID
+ */
+const getCloudinaryUrl = (publicId) => {
+    if (!publicId) return null;
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    return `https://res.cloudinary.com/${cloudName}/image/upload/${publicId}`;
+};
+
 /**
  * @description Créer une nouvelle communauté (Community) et associer les catégories et les fichiers.
  * @route POST /api/communities
@@ -116,7 +126,7 @@ if (uploadedFiles.length > 0) {
                 {
                     model: CommunityFile,
                     as: 'communityFiles',
-                    attributes: ['url', 'type', 'isPrincipale', 'role']
+                    attributes: ['id', 'url', 'type', 'isPrincipale', 'role', 'cloudinaryId']
                 },
                 {
                     model: CommCategory,
@@ -287,7 +297,7 @@ exports.getCommunity = async (req, res) => {
                 { 
                     model: CommunityFile,
                     as: 'communityFiles',
-                    attributes: ['url', 'type', 'isPrincipale', 'role']
+                    attributes: ['id', 'url', 'type', 'isPrincipale', 'role', 'cloudinaryId']
                 }
             ]
         });
@@ -441,6 +451,15 @@ exports.updateCommunity = async (req, res) => {
     const communityId = req.params.id;
 const { name, description, country, facebookLink, instagramLink, whatsappLink, isPremium, price, filesToDelete, principalFileId } = req.body;    const { images, videos, audios, virtualTours } = req.files || {};
     const userId = req.user.userId;
+    
+    console.log('📝 Update community request:', {
+        communityId,
+        hasFiles: !!(req.files && Object.keys(req.files).length > 0),
+        filesReceived: req.files ? Object.keys(req.files) : [],
+        filesToDelete: filesToDelete || 'none',
+        bodyKeys: Object.keys(req.body)
+    });
+    
     const allUploadedFiles = [];
 if (images) allUploadedFiles.push(...images);
 if (videos) allUploadedFiles.push(...videos);
@@ -486,6 +505,9 @@ if (virtualTours) allUploadedFiles.push(...virtualTours);
                 filesToDeleteArray = filesToDelete.split(',').map(id => id.trim());
             }
         }
+        
+        console.log('📸 Files to delete:', filesToDeleteArray);
+        
         if (filesToDeleteArray.length > 0) {
             const deletedFiles = await CommunityFile.findAll({
                 where: {
@@ -493,10 +515,16 @@ if (virtualTours) allUploadedFiles.push(...virtualTours);
                     id: { [Op.in]: filesToDeleteArray }
                 }
             });
+            
+            console.log(`🗑️ Found ${deletedFiles.length} files to delete from DB`);
+            
             for (const file of deletedFiles) {
-                await deleteFile(file.cloudinaryId).catch(e => console.warn(`Avertissement: Échec de la suppression Cloudinary ID ${file.cloudinaryId}`, e));
+                console.log(`🗑️ Deleting file: ${file.cloudinaryId} (${file.role})`);
+                await deleteFile(file.cloudinaryId).catch(e => console.warn(`⚠️ Failed to delete from Cloudinary: ${file.cloudinaryId}`, e));
                 await file.destroy();
             }
+            
+            console.log(`✅ Successfully deleted ${deletedFiles.length} files`);
         }
         
         if (allUploadedFiles && allUploadedFiles.length > 0) {

@@ -8,13 +8,7 @@ export const authApi = api.injectEndpoints({
         method: 'POST',
         body: credentials,
       }),
-      transformResponse: (response: any) => {
-        // Backend returns { success: true, data: { token, user } }
-        if (response.success && response.data) {
-          return response.data; // Return { token, user }
-        }
-        return response;
-      },
+      invalidatesTags: ['User'],
     }),
 
     register: builder.mutation({
@@ -23,12 +17,31 @@ export const authApi = api.injectEndpoints({
         method: 'POST',
         body: userData,
       }),
+      invalidatesTags: ['User'],
     }),
 
     logout: builder.mutation({
       query: () => ({
         url: '/auth/logout',
         method: 'POST',
+      }),
+      invalidatesTags: ['User', 'Admin', 'Community', 'Post'],
+    }),
+
+    verifyOTP: builder.mutation({
+      query: (data: { email: string; otp: string }) => ({
+        url: '/auth/verifyOTP',
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['User'],
+    }),
+
+    resendOTP: builder.mutation({
+      query: (data: { email: string }) => ({
+        url: '/auth/resendOTP',
+        method: 'POST',
+        body: data,
       }),
     }),
   }),
@@ -38,4 +51,6 @@ export const {
   useLoginMutation,
   useRegisterMutation,
   useLogoutMutation,
+  useVerifyOTPMutation,
+  useResendOTPMutation,
 } = authApi;

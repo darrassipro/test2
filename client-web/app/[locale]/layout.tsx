@@ -6,6 +6,7 @@ import { getMessages } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import ReduxProvider from '../../lib/ReduxProvider';
 import { Toaster } from '@/components/ui/sonner';
+import { AuthProvider } from '@/contexts/AuthContext';
 
 // Police Poppins pour l'anglais/français
 const poppins = Poppins({
@@ -64,12 +65,14 @@ export default async function RootLayout({
   return (
     <ReduxProvider>
       <NextIntlClientProvider locale={locale} messages={messages}>
-        <div
-          className={`${poppins.variable} font-poppins min-h-screen bg-background text-foreground antialiased`}
-        >
-          {children}
-        </div>
-        <Toaster position="top-center" richColors theme="light" />
+        <AuthProvider>
+          <div
+            className={`${poppins.variable} font-poppins min-h-screen bg-background text-foreground antialiased`}
+          >
+            {children}
+          </div>
+          <Toaster position="top-center" richColors theme="light" />
+        </AuthProvider>
       </NextIntlClientProvider>
     </ReduxProvider>
   );

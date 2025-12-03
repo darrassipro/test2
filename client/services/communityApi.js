@@ -7,46 +7,12 @@ export const communityApi = createApi({
   tagTypes: ['Community'],
   endpoints: (builder) => ({
     createCommunity: builder.mutation({
-      // data expected: { name, description, country, socialLinks, bannerImage?, avatarImage?, files?: string[] }
-      query: (data) => {
-        const formData = new FormData();
-        formData.append('name', data.name);
-        if (data.description) formData.append('description', data.description);
-        if (data.country) formData.append('country', data.country);
-        if (data.socialLinks) formData.append('socialLinks', JSON.stringify(data.socialLinks));
-
-        // bannerImage and avatarImage expected to be { uri, name?, type? } or simple uri string
-        // We append each file under 'images' and append a matching 'roles' entry so the backend can map roles by index
-        if (data.bannerImage) {
-          const banner = typeof data.bannerImage === 'string' ? { uri: data.bannerImage, name: 'banner.jpg', type: 'image/jpeg' } : data.bannerImage;
-          formData.append('images', banner);
-          formData.append('roles', 'banner');
-        }
-
-        if (data.avatarImage) {
-          const avatar = typeof data.avatarImage === 'string' ? { uri: data.avatarImage, name: 'avatar.jpg', type: 'image/jpeg' } : data.avatarImage;
-          formData.append('images', avatar);
-          formData.append('roles', 'avatar');
-        }
-
-        if (data.files && Array.isArray(data.files)) {
-          data.files.forEach((f) => {
-            const file = typeof f === 'string' ? { uri: f, name: f.split('/').pop() || 'file.jpg', type: 'image/jpeg' } : f;
-            formData.append('images', file);
-            formData.append('roles', 'gallery');
-          });
-        }
-
-        return {
-          url: '/communities',
-          method: 'POST',
-          body: formData,
-          headers: {
-            // Let environment/tools set proper boundary; this header may be required in some native environments
-            'Content-Type': 'multipart/form-data',
-          },
-        };
-      },
+      // data is FormData prepared by the component with images and roles fields
+      query: (formData) => ({
+        url: '/communities',
+        method: 'POST',
+        body: formData,
+      }),
       invalidatesTags: ['Community'],
     }),
     getAllCommunities: builder.query({
@@ -71,7 +37,7 @@ export const communityApi = createApi({
         url: `/communities/${id}`,
         method: 'GET',
       }),
-      providesTags: ['Community'],
+      providesTags: (result, error, id) => [{ type: 'Community', id }],
     }),
     getUserCommunities: builder.query({
       // GET /api/communities/user-joined
@@ -99,39 +65,16 @@ export const communityApi = createApi({
       invalidatesTags: ['Community']
     }),
     updateCommunity: builder.mutation({
-      query: ({ id, ...data }) => {
-        const formData = new FormData();
-        if (data.name) formData.append('name', data.name);
-        if (data.description) formData.append('description', data.description);
-        if (data.country) formData.append('country', data.country);
-        if (data.socialLinks) formData.append('socialLinks', JSON.stringify(data.socialLinks));
-        if (data.bannerImage) {
-          const banner = typeof data.bannerImage === 'string' ? { uri: data.bannerImage, name: 'banner.jpg', type: 'image/jpeg' } : data.bannerImage;
-          formData.append('images', banner);
-          formData.append('roles', 'banner');
-        }
-        if (data.avatarImage) {
-          const avatar = typeof data.avatarImage === 'string' ? { uri: data.avatarImage, name: 'avatar.jpg', type: 'image/jpeg' } : data.avatarImage;
-          formData.append('images', avatar);
-          formData.append('roles', 'avatar');
-        }
-        if (data.files && Array.isArray(data.files)) {
-          data.files.forEach((f) => {
-            const file = typeof f === 'string' ? { uri: f, name: f.split('/').pop() || 'file.jpg', type: 'image/jpeg' } : f;
-            formData.append('images', file);
-            formData.append('roles', 'gallery');
-          });
-        }
-        return {
-          url: `/communities/${id}`,
-          method: 'PUT',
-          body: formData,
-          headers: {
-            'Content-Type': 'multipart/form-data',
-          },
-        };
-      },
-      invalidatesTags: ['Community'],
+      query: ({ id, formData }) => ({
+        url: `/communities/${id}`,
+        method: 'PUT',
+        body: formData,
+        // Don't set Content-Type for FormData - let the browser/RN handle it
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        'Community',
+        { type: 'Community', id }
+      ],
     })
   }),
 });

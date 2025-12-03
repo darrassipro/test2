@@ -176,9 +176,14 @@ export default function PostCard({ post, onLike }: PostCardProps) {
             
             {/* Community name for public posts */}
             {communityName && (
-              <Text className="text-gray-600 text-xs mt-0.5" numberOfLines={1}>
-                {communityName}
-              </Text>
+              <TouchableOpacity 
+                onPress={() => post.community?.id && router.push(`/community/${post.community.id}`)}
+                activeOpacity={0.7}
+              >
+                <Text className="text-gray-600 text-xs mt-0.5" numberOfLines={1}>
+                  {communityName}
+                </Text>
+              </TouchableOpacity>
             )}
           </View>
         </View>

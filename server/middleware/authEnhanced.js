@@ -17,8 +17,8 @@ const authenticateToken = async (req, res, next) => {
         let token = null;
 
         // 1. Essayer de récupérer le token depuis le cookie (méthode principale)
-        if (req.cookies && req.cookies.tk) {
-            token = req.cookies.tk;
+        if (req.cookies && req.cookies.authToken) {
+            token = req.cookies.authToken;
             console.log('Token récupéré depuis le cookie');
         }
         
@@ -154,8 +154,8 @@ const optionalAuth = async (req, res, next) => {
         let token = null;
 
         // Essayer de récupérer le token depuis différentes sources
-        if (req.cookies && req.cookies.tk) {
-            token = req.cookies.tk;
+        if (req.cookies && req.cookies.authToken) {
+            token = req.cookies.authToken;
         } else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
             token = req.headers.authorization.substring(7);
         } else if (req.headers.token) {

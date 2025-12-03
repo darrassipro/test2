@@ -2,13 +2,13 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/authEnhanced'); 
 const { checkRouteAccess } = require('../middleware/checkRouteAccess'); 
-const routeController = require('../controllers/routeController'); 
+const routeController = require('../controllers/routeController');
+const { checkAdminRole } = require('../middleware/checkAdminRole'); 
 
 // 1. Créer un trajet (POST /api/routes)
 router.post(
     '/',
     authenticateToken,
-    checkRouteAccess('create'), // Vérifie que l'utilisateur est le créateur de la communauté
     routeController.createRoute
 );
 
@@ -27,11 +27,10 @@ router.get(
 );
 
 // 4. Mettre à jour un trajet (PATCH /api/routes/:id)
-// Nous utilisons :id pour le routeId et :communityId pour la vérification d'accès
 router.patch(
     '/:communityId/:id', 
     authenticateToken,
-    checkRouteAccess('manage'), // Vérifie que l'utilisateur est le créateur de la communauté
+    checkRouteAccess('manage'),  
     routeController.updateRoute
 );
 
@@ -60,9 +59,24 @@ router.get(
 
 // 8. Terminer un trajet (POST /api/routes/:id/end)
 router.post(
-    '/:id/end', 
+    '/:communityId/:id/end', 
     authenticateToken,
+    checkRouteAccess('manage'), 
     routeController.endRoute 
+);
+
+router.put(
+    '/:communityId/:routeId/approve',
+    authenticateToken,
+    checkAdminRole('admin'), 
+    routeController.approvePendingRoute
+);
+
+router.put(
+    '/:communityId/:routeId/reject',
+    authenticateToken,
+    checkAdminRole('admin'), 
+    routeController.rejectPendingRoute
 );
 
 

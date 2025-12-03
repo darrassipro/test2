@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const postController = require('../controllers/postController');
 const { authenticateToken } = require('../middleware/authEnhanced');
-const { checkPostAccess } = require('../middleware/smartPostAccess');
+const { smartPostAccess } = require('../middleware/smartPostAccess');
+const { checkPostAccess } = require('../middleware/checkPostAccess');
 const { uploadImage } = require('../config/cloudinary');
 const { checkAdminRole } = require('../middleware/checkAdminRole');
 const multer = require('multer');
@@ -24,16 +25,16 @@ router.get(
 ); 
 
 // Get Posts
-router.get('/', authenticateToken, checkPostAccess, postController.getUnifiedPosts);
+router.get('/', authenticateToken, smartPostAccess, postController.getUnifiedPosts);
 
 // Get Post by ID
 router.get('/:postId',authenticateToken, postController.getPostById); 
 
 // Update Post
-router.put('/:postId', authenticateToken,uploadCommunityFields, postController.updatePost);
+router.put('/:postId', authenticateToken, checkPostAccess, uploadCommunityFields, postController.updatePost);
 
 // Delete Post (Soft Delete)
-router.delete('/:postId', authenticateToken, postController.deletePost);
+router.delete('/:postId', authenticateToken,checkPostAccess, postController.deletePost);
 
 // Toggle Like on Post
 router.post('/:postId/like', authenticateToken, postController.togglePostLike);

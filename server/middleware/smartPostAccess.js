@@ -1,6 +1,6 @@
 const { Community, CommunityMembership } = require('../models');
 
-exports.checkPostAccess = async (req, res, next) => {
+exports.smartPostAccess = async (req, res, next) => {
     // On vérifie si l’on se trouve dans Home ou dans Community
     // // Le frontend peut envoyer soit ?source=home soit ?communityId=...
     const isHome = req.query.source === 'home'; 

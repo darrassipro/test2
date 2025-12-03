@@ -7,6 +7,23 @@ export const adminApi = api.injectEndpoints({
       providesTags: ['Admin'],
     }),
 
+    getCreators: builder.query({
+      query: (params?: { page?: number; limit?: number; status?: string; search?: string }) => ({
+        url: '/admin/creators',
+        params,
+      }),
+      providesTags: ['Admin', 'Creators'],
+    }),
+
+    updateUserStatus: builder.mutation({
+      query: ({ userId, status }: { userId: number; status: 'active' | 'suspended' }) => ({
+        url: `/admin/users/${userId}/status`,
+        method: 'PATCH',
+        body: { status },
+      }),
+      invalidatesTags: ['Admin', 'Creators'],
+    }),
+
     getAnalytics: builder.query({
       query: (params?: { timeRange?: string; metric?: string }) => ({
         url: '/admin/analytics',
@@ -69,6 +86,8 @@ export const adminApi = api.injectEndpoints({
 
 export const {
   useGetDashboardQuery,
+  useGetCreatorsQuery,
+  useUpdateUserStatusMutation,
   useGetAnalyticsQuery,
   useGetReportsQuery,
   useApproveReportMutation,

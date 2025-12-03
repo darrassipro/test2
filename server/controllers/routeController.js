@@ -1,11 +1,13 @@
 const { Op } = require('sequelize');
-const { Community, Route, VisitedTrace, Post, User } = require('../models'); 
+const { Community, Route, VisitedTrace, Post, User, CommunityMembership } = require('../models'); 
 const sequelize = Route.sequelize;
+const { getUserRole } = require("../middleware/checkAdminRole"); 
+
 
 /**
  * UTILS INTERNES : Options d'inclusion pour obtenir un trajet complet
  */
-const getRouteIncludeOptions = () => ({
+const getRouteIncludeOptions = (currentUserId) => ({
     include: [
         {
             model: VisitedTrace,
@@ -32,25 +34,73 @@ const getRouteIncludeOptions = () => ({
 
 // 1. Créer un nouveau trajet
 exports.createRoute = async (req, res) => {
+
     const creatorUserId = req.user.userId;
     const communityId = req.params.communityId || req.body.communityId; 
     const { isLive, publishDate } = req.body;
 
+    if (!communityId) {
+        return res.status(400).json({ 
+            success: false,
+            message: "ID de la communauté manquant." 
+        });
+    }
+
+    const t = await sequelize.transaction();
+
     try {
+        const community = await Community.findByPk(communityId, { attributes: ['creatorUserId'] });
+        if (!community) {
+            await t.rollback();
+            return res.status(404).json({ success: false, message: "Communauté non trouvée." });
+        }
+
+        const isCreator = community.creatorUserId === creatorUserId; 
+        const isMemberRecord = await CommunityMembership.findOne({
+            where: { communityId: communityId, userId: creatorUserId }, 
+            transaction: t
+        });
+        
+        const isMember = !!isMemberRecord; 
+        const userRole = await getUserRole(communityId, creatorUserId); 
+        const isAdminOrMod = userRole && ['owner', 'admin'].includes(userRole); 
+        if (!isCreator && !isMember && !isAdminOrMod) {
+            await t.rollback();
+            return res.status(403).json({
+                success: false,
+                message: "Il faut être membre ou créateur ou administrateur de la communauté pour créer un route."
+            });
+        }
+        
+        let routeStatus = 'pending'; 
+        let publicationDate = null; 
+        
+        if (isCreator || isAdminOrMod) {
+            routeStatus = 'approved';
+            publicationDate = publishDate || new Date(); 
+        } else {
+            routeStatus = 'pending';
+        }
+
         const newRoute = await Route.create({
             communityId,
             creatorUserId,
-            isLive: isLive === 'true' || isLive === true, 
-            publishDate: publishDate || null 
-        });
+            isLive: isLive === 'true' || isLive === true,
+            status: routeStatus,
+            publishDate: publicationDate, 
+        }, { transaction: t }); 
 
+        await t.commit();
         return res.status(201).json({
             success: true,
-            message: "Trajet créé avec succès. Le tracé est en cours (Live Visibility: " + newRoute.isLive + ").",
+            message: `Trajet créé avec succès. Statut initial: ${newRoute.status}.`,
             route: newRoute
         });
 
     } catch (error) {
+        if (t && t.finished !== 'commit' && t.finished !== 'rollback') {
+            await t.rollback(); 
+        }
         console.error("Erreur lors de la création du trajet:", error);
         return res.status(500).json({
             success: false,
@@ -59,34 +109,140 @@ exports.createRoute = async (req, res) => {
         });
     }
 };
+exports.approvePendingRoute = async (req, res) => {
+    const t = await sequelize.transaction();
+    const currentUserId = req.user.userId;
+    try {
+        const { routeId, communityId } = req.params;
+        const route = await Route.findOne({
+            where: { id: routeId,communityId: communityId, status: 'pending' },
+            transaction: t
+        });
+
+        if (!route) {
+            await t.rollback();
+            return res.status(404).json({ 
+                success: false, 
+                message: "Pending route not found or already approved/rejected" 
+            });
+        }
+        
+        await route.update({ 
+            status: 'approved',
+            publicationDate: new Date(), 
+        }, { transaction: t });
+        
+        await t.commit();
+
+        const updatedRoute = await Route.findByPk(routeId, getRouteIncludeOptions(currentUserId))
+
+        res.status(200).json({
+            success: true,
+            message: "Route approved and published successfully!",
+            product: updatedRoute
+        });
+
+    } catch (error) {
+        if (t && t.finished !== 'commit') { 
+            await t.rollback();
+        }
+        console.error('Error approving pending route:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: "Failed to approve and publish route", 
+            error: error.message 
+        });
+    }
+};
+
+exports.rejectPendingRoute = async (req, res) => {
+    const t = await sequelize.transaction();
+    try {
+        const { routeId, communityId } = req.params;
+        
+        const [updatedRows] = await Route.update(
+            { status: 'rejected' }, 
+            { 
+                where: { id: routeId,communityId: communityId, status: 'pending' },
+                transaction: t
+            }
+        );
+
+        if (updatedRows === 0) {
+            await t.rollback();
+            return res.status(404).json({ 
+                success: false, 
+                message: "Pending route not found or already approved/rejected" 
+            });
+        }
+        
+        await t.commit();
+
+        res.status(200).json({
+            success: true,
+            message: "Route rejected successfully. It will no longer be visible.",
+        });
+
+    } catch (error) {
+        if (t && t.finished !== 'commit') { 
+            await t.rollback();
+        }
+        console.error('Error rejecting pending route:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: "Failed to reject route", 
+            error: error.message 
+        });
+    }
+};
 
 // 2. Obtenir les trajets d’une communauté
 exports.getRoutesByCommunity = async (req, res) => {
     const { communityId } = req.params;
     const { isLive, page = 1, limit = 10 } = req.query;
+    const creatorUserId = req.user.userId; 
 
     const offset = (parseInt(page) - 1) * parseInt(limit);
     const where = { communityId };
 
-    // --- LOGIQUE DE FILTRAGE MISE À JOUR ---
-    if (isLive !== undefined) {
-        // Filtrer par isLive (visibilité en direct)
-        where.isLive = isLive === 'true';
-        // Si on demande isLive=false, on pourrait vouloir inclure uniquement ceux qui sont PUBLIÉS 
-        // et non pas ceux qui sont en cours et cachés (brouillons)
-        if (where.isLive === false) {
-             where.publishDate = { [Op.ne]: null }; 
-             where.publishDate = { [Op.lte]: new Date() }; 
-        }
-    } else {
-        // Si aucun filtre n'est passé, on n'affiche que ceux qui sont LIVE OU ceux qui sont PUBLIÉS
-        where[Op.or] = [
-             { isLive: true }, // LIVE
-             { publishDate: { [Op.ne]: null, [Op.lte]: new Date() } } // OU PUBLIÉ (même si isLive=false)
-        ];
-    }
-
     try {
+        // 1. Déterminer le rôle de l'utilisateur
+        const community = await Community.findByPk(
+            communityId, 
+            { attributes: ['creatorUserId'] }
+        );
+        if (!community) {
+             return res.status(404).json({ 
+                success: false,
+                message: "Communauté non trouvée."
+            });
+        }
+        const isCommunityOwner = community.creatorUserId === creatorUserId;
+        const userRole = await getUserRole(communityId, creatorUserId);
+        const isAdminOrMod = userRole && ['owner', 'admin'].includes(userRole);
+        
+        // 2. Logique de statut : Les utilisateurs normaux voient uniquement les trajets 'approved'
+        if (!isCommunityOwner && !isAdminOrMod) {
+            where.status = 'approved'; 
+        }
+        
+        // --- LOGIQUE DE FILTRAGE MISE À JOUR (isLive) ---
+        // S'applique aux APPROVED routes ou aux routes vues par les admins/créateurs
+        if (isLive !== undefined) {
+            where.isLive = isLive === 'true';
+            
+            if (where.isLive === false) {
+                 // Si on demande isLive=false, on inclut ceux qui sont PUBLIÉS
+                 where.publishDate = { [Op.ne]: null, [Op.lte]: new Date() }; 
+            }
+        } else {
+            // Si aucun filtre n'est passé, on n'affiche que ceux qui sont LIVE OU ceux qui sont PUBLIÉS
+            where[Op.or] = [
+                 { isLive: true }, // LIVE
+                 { publishDate: { [Op.ne]: null, [Op.lte]: new Date() } } // OU PUBLIÉ (même si isLive=false)
+            ];
+        }
+
         const result = await Route.findAndCountAll({
             where,
             attributes: [
@@ -95,6 +251,7 @@ exports.getRoutesByCommunity = async (req, res) => {
                 'isLive', 
                 'publishDate', 
                 'createdAt',
+                'status', // Ajout du status
                 [sequelize.fn('COUNT', sequelize.col('visitedTraces.id')), 'visitedPointsCount']
             ],
             include: [{
@@ -114,7 +271,7 @@ exports.getRoutesByCommunity = async (req, res) => {
         const routes = result.rows.map(route => {
             const visitedPointsCount = route.dataValues.visitedPointsCount || 0;
             const plainRoute = route.get({ plain: true });
-            delete plainRoute.visitedTraces; // Supprimer l'objet vide si l'association est LEFT JOIN
+            delete plainRoute.visitedTraces; 
             return {
                 ...plainRoute,
                 visitedPointsCount: parseInt(visitedPointsCount)
@@ -144,21 +301,52 @@ exports.getRoutesByCommunity = async (req, res) => {
 
 // 3. Obtenir un trajet par ID
 exports.getRouteById = async (req, res) => {
+    const currentUserId = req.user.userId;
     const { id } = req.params;
 
     try {
-        const route = await Route.findByPk(id, getRouteIncludeOptions());
+        const minimalRoute = await Route.findByPk(id, {
+            attributes: ['id', 'creatorUserId', 'communityId', 'status'], 
+            include: [{
+                model: Community,
+                as: 'community',
+                attributes: ['creatorUserId'] 
+            }]
+        });
 
-        if (!route) {
+        if (!minimalRoute) {
             return res.status(404).json({ 
                 success: false,
                 message: "Trajet non trouvé." 
             });
         }
+        const isRouteCreator = minimalRoute.creatorUserId === currentUserId;
+        const communityId = minimalRoute.communityId;
+        const userRole = await getUserRole(communityId, currentUserId);
+        const isAdminOrOwner = userRole && ['owner', 'admin'].includes(userRole);
 
-        // Simplification de la réponse pour le nombre de points
-        const visitedPointsCount = route.visitedTraces ? route.visitedTraces.length : 0;
-        const responseRoute = route.get({ plain: true });
+        let whereCondition = { id };
+
+        const canViewDrafts = isRouteCreator || isAdminOrOwner;
+
+        if (!canViewDrafts) {
+            // Si l'utilisateur n'est NI créateur, NI Admin/Owner, la route DOIT être approuvée
+            whereCondition.status = 'approved'; 
+        }
+        
+       const fullRoute = await Route.findOne({
+            where: whereCondition,
+            ...getRouteIncludeOptions(currentUserId) 
+        });
+        if (!fullRoute) {
+            return res.status(404).json({
+                success: false,
+                message: "Trajet non trouvé ou vous n'avez pas l'autorisation de le voir."
+            });
+        }
+       
+        const visitedPointsCount = fullRoute.visitedTraces ? fullRoute.visitedTraces.length : 0;
+        const responseRoute = fullRoute.get({ plain: true });
         responseRoute.visitedPointsCount = visitedPointsCount;
         
         return res.status(200).json({
@@ -166,7 +354,7 @@ exports.getRouteById = async (req, res) => {
             route: responseRoute
         });
 
-    } catch (error) {
+        } catch (error) {
         console.error("Erreur lors de la récupération du trajet par ID:", error);
         return res.status(500).json({
             success: false,
@@ -178,7 +366,6 @@ exports.getRouteById = async (req, res) => {
 
 // 4. Mettre à jour un trajet (Patch)
 exports.updateRoute = async (req, res) => {
-    // req.route est attaché par le middleware checkRouteAccess('manage')
     const route = req.route; 
     const { isLive, publishDate } = req.body;
 
@@ -186,6 +373,12 @@ exports.updateRoute = async (req, res) => {
         return res.status(404).json({ 
             success: false,
             message: "Trajet non trouvé." });
+    }
+    if (route.status === 'rejected') {
+        return res.status(403).json({ 
+            success: false,
+            message: "Impossible de mettre à jour un trajet qui a été rejeté." 
+        });
     }
 
     try {
@@ -257,8 +450,8 @@ exports.deleteRoute = async (req, res) => {
 exports.addVisitedTrace = async (req, res) => {
     const { id: routeId } = req.params;
     const { longitude, latitude } = req.body;
+    const currentUserId = req.user.userId; 
 
-    // Validation des coordonnées de base
     if (!longitude || !latitude) {
         return res.status(400).json({ 
             success: false,
@@ -267,7 +460,13 @@ exports.addVisitedTrace = async (req, res) => {
     }
     
     try {
-        const route = await Route.findByPk(routeId, { attributes: ['id', 'isLive'] });
+        const route = await Route.findByPk(
+            routeId,
+            { attributes: 
+                [
+                    'id', 'isLive', 'status', 'creatorUserId', 'communityId'
+                ]
+            });
 
         if (!route) {
             return res.status(404).json({ 
@@ -275,8 +474,28 @@ exports.addVisitedTrace = async (req, res) => {
                 message: "Trajet non trouvé." 
             });
         }
+        // 1. Vérification des permissions
+        const isRouteCreator = route.creatorUserId === currentUserId;
+        const userRole = await getUserRole(route.communityId, currentUserId);
+        const isAdminOrOwner = userRole && ['owner', 'admin'].includes(userRole);
 
-        // Créer le VisitedTrace
+        // 2. Logique de statut : Seuls les APPROVED et les routes éditables peuvent recevoir des traces
+        if (route.status === 'rejected') {
+             return res.status(403).json({
+                success: false,
+                message: "Impossible d'ajouter des traces à un trajet rejeté."
+            });
+        }
+        
+        // Si la route est 'pending' et que l'utilisateur n'est PAS créateur/admin/owner, refuser.
+        // Les admins/créateurs peuvent ajouter des traces en 'pending' (pour l'édition).
+        if (route.status === 'pending' && !isRouteCreator && !isAdminOrOwner) {
+            return res.status(403).json({ 
+                success: false,
+                message: "Le trajet est en attente d'approbation et n'est pas modifiable par cet utilisateur."
+            });
+        }
+
         const newTrace = await VisitedTrace.create({
             routeId,
             longitude: parseFloat(longitude),
@@ -334,10 +553,7 @@ exports.getRouteTrace = async (req, res) => {
 
 // 8. Terminer un trajet
 exports.endRoute = async (req, res) => {
-    const { id } = req.params;
-    
-    try {
-        const route = await Route.findByPk(id);
+    const route = req.route;
 
         if (!route) {
             return res.status(404).json({ 
@@ -346,6 +562,13 @@ exports.endRoute = async (req, res) => {
             });
         }
 
+    try {
+        if (route.status === 'rejected') {
+            return res.status(403).json({
+                success: false,
+                message: "Impossible de terminer un trajet rejeté."
+            });
+        }
         // Vérification si le trajet n'est pas déjà considéré comme publié/terminé
         // On considère qu'il est terminé s'il a déjà une date de publication.
         if (route.publishDate) {
@@ -353,15 +576,17 @@ exports.endRoute = async (req, res) => {
                  success: false,
                  message: "Le trajet est déjà terminé et publié." });
         }
+        if (route.status === 'pending') {
+            return res.status(403).json({
+                success: false,
+                message: "Le trajet est en attente d'approbation et ne peut pas être terminé avant d'être approuvé."
+            });
+        }
         
         const updateFields = {
             isLive: false, // Arrêter la diffusion en direct (même s'il était déjà à false)
+            publishDate: new Date(),
         };
-        
-        // Définir publishDate si non défini
-        if (!route.publishDate) {
-            updateFields.publishDate = new Date();
-        }
 
         const updatedRoute = await route.update(updateFields);
 

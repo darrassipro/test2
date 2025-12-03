@@ -12,6 +12,15 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN;
 const OTP_EXPIRATION_MINUTES = 10;
 
 /**
+ * Generate Cloudinary URL from public ID
+ */
+const getCloudinaryUrl = (publicId) => {
+    if (!publicId) return null;
+    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+    return `https://res.cloudinary.com/${cloudName}/image/upload/${publicId}`;
+};
+
+/**
  * Génère un token JWT avec les informations de l'utilisateur
  */
 const generateToken = (user) => {
@@ -46,6 +55,7 @@ const formatUserResponse = (user) => {
         totalCommunities: user.totalCommunities,
         isVerified: user.isVerified,
         isActive: user.isActive,
+        isProfileCompleted: user.isProfileCompleted,
         role: user.role || 'user',
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,
@@ -143,7 +153,15 @@ const registerUser = async (req, res) => {
         // Générer le token JWT
         const token = generateToken(newUser);
 
-        // Retourner la réponse avec le token et les infos utilisateur
+        // Set HTTP-only cookie for web
+        res.cookie('authToken', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+            sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        });
+
+        // Return token in response body for mobile apps
         return res.status(201).json({
             success: true,
             message: 'Inscription réussie. Veuillez vérifier votre email.',
@@ -236,7 +254,16 @@ const loginUser = async (req, res) => {
         // Générer le token JWT
         const token = generateToken(user);
 
-        // Retourner la réponse avec le token et les infos utilisateur
+        // Set HTTP-only cookie for web
+        res.cookie('authToken', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+            sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        });
+
+        // Return token in response body for mobile apps
+        // Web apps will ignore it and use the cookie instead
         return res.status(200).json({
             success: true,
             message: 'Connexion réussie',
@@ -491,7 +518,15 @@ const verifyOTP = async (req, res) => {
         // Générer un nouveau token avec le statut vérifié mis à jour
         const token = generateToken(user);
 
-        // Retourner la réponse avec le token et les infos utilisateur
+        // Set HTTP-only cookie for web
+        res.cookie('authToken', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+            sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        });
+
+        // Return token in response body for mobile apps
         return res.status(200).json({
             success: true,
             message: 'Email vérifié avec succès',
@@ -599,11 +634,40 @@ const resendOTP = async (req, res) => {
     }
 };
 
+/**
+ * Déconnexion d'un utilisateur
+ * POST /auth/logout
+ */
+const logoutUser = async (req, res) => {
+    try {
+        // Clear the HTTP-only cookie
+        res.clearCookie('authToken', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Déconnexion réussie',
+        });
+    } catch (error) {
+        console.error('Erreur lors de la déconnexion:', error);
+        return res.status(500).json({
+            success: false,
+            error: 'Erreur lors de la déconnexion',
+            code: 'LOGOUT_ERROR',
+            message: error.message,
+        });
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
     sendOtp,
     verifyOTP,
     resendOTP,
+    logoutUser,
 };
 

@@ -2,11 +2,24 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, LogOut, User } from 'lucide-react';
 import Image from 'next/image';
+import { LoginModal } from '@/components/auth/LoginModal';
+import { RegisterModal } from '@/components/auth/RegisterModal';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 const Navbar = () => {
+  const { user, isLoading, logout } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [registerModalOpen, setRegisterModalOpen] = useState(false);
+
+  const handleLogout = async () => {
+    await logout();
+    toast.success('Logged out successfully');
+  };
 
   const navLinks = [
     { href: '/', label: 'Home' },
@@ -61,18 +74,38 @@ const Navbar = () => {
 
           {/* Action Buttons */}
           <div className="hidden md:flex md:items-center md:gap-4">
-            <Link
-              href="/login"
-              className="rounded-lg border-2 border-[#E72858] bg-white px-4 py-2 text-sm font-semibold text-[#E72858] transition hover:bg-[#E72858] hover:text-white"
-            >
-              Login
-            </Link>
-            <Link
-              href="/communities"
-              className="rounded-lg border-2 border-[#E72858] px-4 py-2 text-sm font-semibold text-white bg-[#E72858] hover:text-white"
-            >
-              Join a Community
-            </Link>
+            {!isLoading && (
+              user ? (
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-[#212529]">
+                    {user.firstName} {user.lastName}
+                  </span>
+                  <Button
+                    onClick={handleLogout}
+                    variant="outline"
+                    className="border-2 border-[#E72858] text-[#E72858] hover:bg-[#E72858] hover:text-white"
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Logout
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setLoginModalOpen(true)}
+                    className="rounded-lg border-2 border-[#E72858] bg-white px-4 py-2 text-sm font-semibold text-[#E72858] transition hover:bg-[#E72858] hover:text-white"
+                  >
+                    Login
+                  </button>
+                  <Link
+                    href="/communities"
+                    className="rounded-lg border-2 border-[#E72858] px-4 py-2 text-sm font-semibold text-white bg-[#E72858] hover:text-white"
+                  >
+                    Join a Community
+                  </Link>
+                </>
+              )
+            )}
           </div>
 
           {/* Mobile Menu Button */}
@@ -105,25 +138,62 @@ const Navbar = () => {
                 </Link>
               ))}
               <div className="flex flex-col gap-3 pt-2">
-                <Link
-                  href="/login"
-                  className="rounded-lg border-2 border-[#E72858] bg-white px-4 py-2 text-center text-sm font-semibold text-[#E72858] transition hover:bg-[#E72858] hover:text-white"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Login
-                </Link>
-                <Link
-                  href="/communities"
-                  className="rounded-lg bg-[#E72858] px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-[#C2185B]"
-                  onClick={() => setMobileMenuOpen(false)}
-                >
-                  Join a Community
-                </Link>
+                {!isLoading && (
+                  user ? (
+                    <div className="flex flex-col gap-3">
+                      <div className="text-sm font-medium text-[#212529] px-4">
+                        {user.firstName} {user.lastName}
+                      </div>
+                      <Button
+                        onClick={() => {
+                          setMobileMenuOpen(false);
+                          handleLogout();
+                        }}
+                        variant="outline"
+                        className="border-2 border-[#E72858] text-[#E72858] hover:bg-[#E72858] hover:text-white"
+                      >
+                        <LogOut className="h-4 w-4 mr-2" />
+                        Logout
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          setMobileMenuOpen(false);
+                          setLoginModalOpen(true);
+                        }}
+                        className="rounded-lg border-2 border-[#E72858] bg-white px-4 py-2 text-center text-sm font-semibold text-[#E72858] transition hover:bg-[#E72858] hover:text-white"
+                      >
+                        Login
+                      </button>
+                      <Link
+                        href="/communities"
+                        className="rounded-lg bg-[#E72858] px-4 py-2 text-center text-sm font-semibold text-white transition hover:bg-[#C2185B]"
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        Join a Community
+                      </Link>
+                    </>
+                  )
+                )}
               </div>
             </div>
           </div>
         )}
       </nav>
+
+      {/* Auth Modals */}
+      <LoginModal 
+        open={loginModalOpen} 
+        onOpenChange={setLoginModalOpen}
+        onSwitchToRegister={() => setRegisterModalOpen(true)}
+      />
+      <RegisterModal 
+        open={registerModalOpen} 
+        onOpenChange={setRegisterModalOpen}
+        onSwitchToLogin={() => setLoginModalOpen(true)}
+      />
     </header>
   );
 };

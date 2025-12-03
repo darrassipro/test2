@@ -15,6 +15,87 @@ router.get(
     adminController.getDashboard
 );
 
+// GET /api/admin/analytics
+// Get platform analytics data
+router.get(
+    '/analytics',
+    authenticateToken,
+    checkPlatformAdmin,
+    adminController.getAnalytics
+);
+
+// GET /api/admin/reports
+// Get content reports
+router.get(
+    '/reports',
+    authenticateToken,
+    checkPlatformAdmin,
+    adminController.getReports
+);
+
+// PATCH /api/admin/reports/:reportId/approve
+// Approve a report
+router.patch(
+    '/reports/:reportId/approve',
+    authenticateToken,
+    checkPlatformAdmin,
+    adminController.approveReport
+);
+
+// PATCH /api/admin/reports/:reportId/reject
+// Reject a report
+router.patch(
+    '/reports/:reportId/reject',
+    authenticateToken,
+    checkPlatformAdmin,
+    adminController.rejectReport
+);
+
+// PATCH /api/admin/reports/:reportId/dismiss
+// Dismiss a report
+router.patch(
+    '/reports/:reportId/dismiss',
+    authenticateToken,
+    checkPlatformAdmin,
+    adminController.dismissReport
+);
+
+// GET /api/admin/settings
+// Get platform settings
+router.get(
+    '/settings',
+    authenticateToken,
+    checkPlatformAdmin,
+    adminController.getSettings
+);
+
+// PATCH /api/admin/settings
+// Update platform settings
+router.patch(
+    '/settings',
+    authenticateToken,
+    checkPlatformAdmin,
+    adminController.updateSettings
+);
+
+// GET /api/admin/creators
+// Get all creators/users with pagination and filters
+router.get(
+    '/creators',
+    authenticateToken,
+    checkPlatformAdmin,
+    adminController.getCreators
+);
+
+// PATCH /api/admin/users/:userId/status
+// Update user status (activate/suspend)
+router.patch(
+    '/users/:userId/status',
+    authenticateToken,
+    checkPlatformAdmin,
+    adminController.updateUserStatus
+);
+
 // Community-level admin routes
 // POST /api/admin/communities/:communityId/admins
 // Ajouter un administrateur (Nécessite au moins le rôle 'admin')

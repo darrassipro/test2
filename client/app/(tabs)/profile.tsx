@@ -69,14 +69,18 @@ export default function Profile() {
       label: "Personal informations",
       iconComponent: User,
       color: "#000000",
-      onPress: () => {},
+      onPress: () => {
+        router.push('/personal-information');
+      },
     },
     {
       id: "password-security",
       label: "Password & Security",
       iconComponent: Lock,
       color: "#000000",
-      onPress: () => {},
+            onPress: () => {
+        router.push('/password-security');
+      },
     },
     {
       id: "contact-support",
@@ -90,7 +94,9 @@ export default function Profile() {
       label: "Switch Language",
       iconComponent: Languages,
       color: "#000000",
-      onPress: () => {},
+      onPress: () => {
+        router.push('/language-settings');
+      },
     },
     {
       id: "logout",
@@ -138,7 +144,9 @@ export default function Profile() {
       label: "Personal informations",
       iconComponent: User,
       color: "#1F1F1F",
-      onPress: () => {},
+      onPress: () => {
+        router.push('/personal-information');
+      },
     },
     {
       id: "orders",
@@ -173,7 +181,9 @@ export default function Profile() {
       label: "Password & Security",
       iconComponent: Lock,
       color: "#1F1F1F",
-      onPress: () => {},
+            onPress: () => {
+        router.push('/password-security');
+      },
     },
     {
       id: "contact-support",
@@ -187,7 +197,9 @@ export default function Profile() {
       label: "Switch Language",
       iconComponent: Languages,
       color: "#1F1F1F",
-      onPress: () => {},
+      onPress: () => {
+        router.push('/language-settings');
+      },
     },
     {
       id: "logout",

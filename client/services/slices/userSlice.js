@@ -141,6 +141,14 @@ const userSlice = createSlice({
             state.user = action.payload.data;
           }
         }
+      )
+      .addMatcher(
+        userApi.endpoints.completeRegistration.matchFulfilled,
+        (state, action) => {
+          if (action.payload && action.payload.success && action.payload.data) {
+            state.user = action.payload.data;
+          }
+        }
       );
   },
 });

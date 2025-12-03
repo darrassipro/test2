@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -56,6 +56,13 @@ export default function CompleteProfile() {
   
   const [profileImage, setProfileImage] = useState<string | null>(user?.profileImage || null);
   const [bannerImage, setBannerImage] = useState<string | null>(user?.banner || null);
+  
+  // Track if images are newly picked (local files) vs existing Cloudinary URLs
+  const [isProfileImageNew, setIsProfileImageNew] = useState(false);
+  const [isBannerImageNew, setIsBannerImageNew] = useState(false);
+  
+  // Prevent useEffect from overwriting manually picked images
+  const skipImageUpdate = useRef({ profile: false, banner: false });
 
   // Add a fullName state for the input
   const [fullName, setFullName] = useState(
@@ -72,8 +79,14 @@ export default function CompleteProfile() {
       });
       setFullName([user.firstName, user.lastName].filter(Boolean).join(' '));
       setSocialLinks(parseSocialLinks(user.socialMediaLinks));
-      setProfileImage(user.profileImage || null);
-      setBannerImage(user.banner || null);
+      
+      // Only update images if they weren't manually picked
+      if (!skipImageUpdate.current.profile) {
+        setProfileImage(user.profileImage || null);
+      }
+      if (!skipImageUpdate.current.banner) {
+        setBannerImage(user.banner || null);
+      }
 
       // Check profile completion from backend
       if (user.isProfileCompleted) {
@@ -84,59 +97,95 @@ export default function CompleteProfile() {
 
   const [showCountryModal, setShowCountryModal] = useState(false);
   const [countrySearch, setCountrySearch] = useState('');
+  const [isImagePicking, setIsImagePicking] = useState(false);
 
   const filteredCountries = COUNTRIES.filter(country =>
     country.toLowerCase().includes(countrySearch.toLowerCase())
   );
 
   const handleImagePick = async (type: 'profile' | 'banner') => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
-    if (status !== 'granted') {
-      Alert.alert('Permission requise', 'Nous avons besoin de votre permission pour accéder aux photos.');
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: type === 'profile' ? [1, 1] : [16, 9],
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      if (type === 'profile') {
-        setProfileImage(result.assets[0].uri);
-      } else {
-        setBannerImage(result.assets[0].uri);
+    try {
+      setIsImagePicking(true);
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (status !== 'granted') {
+        Alert.alert('Permission requise', 'Nous avons besoin de votre permission pour accéder aux photos.');
+        return;
       }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: type === 'profile' ? [1, 1] : [16, 9],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        if (type === 'profile') {
+          setProfileImage(result.assets[0].uri);
+          setIsProfileImageNew(true);
+          skipImageUpdate.current.profile = true;
+        } else {
+          setBannerImage(result.assets[0].uri);
+          setIsBannerImageNew(true);
+          skipImageUpdate.current.banner = true;
+        }
+      }
+    } finally {
+      setIsImagePicking(false);
     }
   };
 
   const handleSubmit = async () => {
     try {
-      const registrationData: any = {};
+      console.log('🚀 Starting profile completion...');
 
-      // Split fullName into firstName and lastName on submit
+      const formDataPayload = new FormData();
+      
+      // Add images if new
+      if (profileImage && isProfileImageNew) {
+        formDataPayload.append('profileImage', {
+          uri: profileImage,
+          name: 'profile.jpg',
+          type: 'image/jpeg',
+        } as any);
+      }
+      
+      if (bannerImage && isBannerImageNew) {
+        formDataPayload.append('banner', {
+          uri: bannerImage,
+          name: 'banner.jpg',
+          type: 'image/jpeg',
+        } as any);
+      }
+
+      // Add text data
       const names = fullName.trim().split(' ');
-      registrationData.firstName = names[0] || '';
-      registrationData.lastName = names.slice(1).join(' ') || '';
+      formDataPayload.append('firstName', names[0] || '');
+      formDataPayload.append('lastName', names.slice(1).join(' ') || '');
 
-      if (formData.profileDescription.trim()) registrationData.profileDescription = formData.profileDescription.trim();
-      if (formData.country.trim()) registrationData.country = formData.country.trim();
-      if (profileImage) registrationData.profileImage = profileImage;
-      if (bannerImage) registrationData.banner = bannerImage;
+      if (formData.profileDescription.trim()) {
+        formDataPayload.append('profileDescription', formData.profileDescription.trim());
+      }
+      if (formData.country.trim()) {
+        formDataPayload.append('country', formData.country.trim());
+      }
 
       const linksToSend = {
         facebook: socialLinks.facebook ? socialLinks.facebook.trim() : '',
         instagram: socialLinks.instagram ? socialLinks.instagram.trim() : '',
         whatsapp: socialLinks.whatsapp ? socialLinks.whatsapp.trim() : '',
       };
-      registrationData.socialMediaLinks = JSON.stringify(linksToSend);
+      formDataPayload.append('socialMediaLinks', JSON.stringify(linksToSend));
 
-      const result = await completeRegistration(registrationData).unwrap();
+      const result = await completeRegistration(formDataPayload).unwrap();
 
       if (result.success) {
+        console.log('🎉 All uploads completed successfully!');
+        setIsProfileImageNew(false);
+        setIsBannerImageNew(false);
+        skipImageUpdate.current = { profile: false, banner: false };
+        
         await refetchCurrentUser();
 
         Toast.show({
@@ -148,7 +197,15 @@ export default function CompleteProfile() {
         router.replace('/profile-success');
       }
     } catch (error: any) {
-      console.error('Error completing profile:', error);
+      console.error('❌ Profile completion failed!');
+      console.error('❌ Error details:', {
+        status: error?.status,
+        code: error?.data?.code,
+        message: error?.data?.message,
+        error: error?.data?.error,
+        fullError: JSON.stringify(error, null, 2)
+      });
+      
       Toast.show({
         type: 'error',
         text1: 'Erreur',
@@ -298,21 +355,30 @@ export default function CompleteProfile() {
 
       {/* Bottom Actions */}
       <View className="absolute bottom-7 left-0 right-0 items-center gap-[17px] px-5">
-        <TouchableOpacity 
-          className="w-full h-[50px] bg-[#E72858] rounded-[1200px] justify-center items-center"
-          onPress={handleSubmit}
-          disabled={isLoading}
-        >
-          <Text className="text-[15px] font-bold text-white" style={{ fontFamily: 'Inter_500Medium', letterSpacing: 0.007 }}>
-            {isLoading ? 'Saving...' : 'Next'}
-          </Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity onPress={handleSkip}>
-          <Text className="text-[15px] font-semibold text-[#1F1F1F]" style={{ fontFamily: 'Inter_500Medium', letterSpacing: 0.007 }}>
-            Skip
-          </Text>
-        </TouchableOpacity>
+        {!isLoading && !isImagePicking ? (
+          <>
+            <TouchableOpacity 
+              className="w-full h-[50px] bg-[#E72858] rounded-[1200px] justify-center items-center"
+              onPress={handleSubmit}
+            >
+              <Text className="text-[15px] font-bold text-white" style={{ fontFamily: 'Inter_500Medium', letterSpacing: 0.007 }}>
+                Next
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity onPress={handleSkip}>
+              <Text className="text-[15px] font-semibold text-[#1F1F1F]" style={{ fontFamily: 'Inter_500Medium', letterSpacing: 0.007 }}>
+                Skip
+              </Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <View className="w-full h-[50px] bg-gray-400 rounded-[1200px] justify-center items-center">
+            <Text className="text-[15px] font-bold text-white" style={{ fontFamily: 'Inter_500Medium', letterSpacing: 0.007 }}>
+              {isImagePicking ? 'Processing image...' : 'Uploading...'}
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* Country Selection Modal */}

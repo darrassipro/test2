@@ -57,6 +57,43 @@ export const userApi = api.injectEndpoints({
       }),
       invalidatesTags: ['User'],
     }),
+
+    getCurrentUser: builder.query({
+      query: () => '/users/me',
+      providesTags: ['User'],
+    }),
+
+    getUserById: builder.query({
+      query: (id: number) => `/users/${id}`,
+      providesTags: ['User'],
+    }),
+
+    updateUserProfile: builder.mutation({
+      query: (data) => ({
+        url: '/users/update',
+        method: 'PUT',
+        body: data,
+      }),
+      invalidatesTags: ['User'],
+    }),
+
+    updatePassword: builder.mutation({
+      query: (data: { currentPassword: string; newPassword: string }) => ({
+        url: '/users/updatePassword',
+        method: 'PUT',
+        body: data,
+      }),
+      invalidatesTags: ['User'],
+    }),
+
+    completeRegistration: builder.mutation({
+      query: (formData) => ({
+        url: '/users/complete-registration',
+        method: 'POST',
+        body: formData,
+      }),
+      invalidatesTags: ['User'],
+    }),
   }),
 });
 
@@ -68,4 +105,9 @@ export const {
   useUnbanUserMutation,
   useUpdateUserRoleMutation,
   useDeleteUserMutation,
+  useGetCurrentUserQuery,
+  useGetUserByIdQuery,
+  useUpdateUserProfileMutation,
+  useUpdatePasswordMutation,
+  useCompleteRegistrationMutation,
 } = userApi;

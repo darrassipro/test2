@@ -2,10 +2,12 @@ import { useMemo, useRef, useState, useEffect } from "react";
 import { View, Text, Image, TextInput, FlatList, Dimensions, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { ArrowLeft, ArrowLeftIcon, BookmarkIcon, Calendar, Ellipsis, MapPin, MessageCircle, Share2, UserRoundPlus } from "lucide-react-native";
+import { ArrowLeft, ArrowLeftIcon, BookmarkIcon, Calendar, Ellipsis, MapPin, MessageCircle, Share2, UserRoundPlus, UserCheck } from "lucide-react-native";
 import icons from "@/constants/icons";
 import { useGetPostByIdQuery, useTogglePostLikeMutation, useToggleSavePostMutation, useCreateCommentMutation, useRecordShareMutation, useToggleCommentLikeMutation } from '../../services/postApi';
+import { useJoinCommunityMutation } from '../../services/communityApi';
 import emitter from "@/lib/eventEmitter";
+import Toast from 'react-native-toast-message';
  
 const Details = () => {
   const { id } = useLocalSearchParams();
@@ -36,8 +38,17 @@ const Details = () => {
   const [togglePostLike, { isLoading: isLiking }] = useTogglePostLikeMutation();
   const [toggleSavePost, { isLoading: isSaving }] = useToggleSavePostMutation();
   const [toggleCommentLike, { isLoading: isCommentLikeLoading }] = useToggleCommentLikeMutation();
+  const [joinCommunity, { isLoading: isJoining }] = useJoinCommunityMutation();
 
   const [recordShare, { isLoading: isSharing }] = useRecordShareMutation();
+  const [isMemberLocal, setIsMemberLocal] = useState<boolean | null>(null);
+
+  // Sync membership state with post data - only when post data first loads
+  useEffect(() => {
+    if (post?.isMember !== undefined) {
+      setIsMemberLocal(post.isMember);
+    }
+  }, [post?.isMember]);
 
   const formatCount = (num: number) => {
     if (num >= 1e9) return `${parseFloat((num / 1e9).toFixed(1)).toString().replace(/\.0$/, "")}B`;
@@ -123,10 +134,52 @@ const Details = () => {
             {/* TODO: Afficher la localisation si disponible */}
           </View>
         </View>
-        <TouchableOpacity className="px-4 py-1.5 rounded-full flex-row items-center gap-1">
-          <UserRoundPlus size={18} color="#E72858" />
-          <Text className="text-[#E72858] text-sm ml-1 font-semibold">Join</Text>
-        </TouchableOpacity>
+        {post?.community?.id && isMemberLocal !== null && (
+          isMemberLocal ? (
+            <View className="px-4 py-1.5 rounded-full flex-row items-center gap-1" style={{ backgroundColor: '#E8F5E9' }}>
+              <UserCheck size={18} color="#4CAF50" />
+              <Text className="text-[#4CAF50] text-sm ml-1 font-semibold">Joined</Text>
+            </View>
+          ) : (
+            <TouchableOpacity 
+              className="px-4 py-1.5 rounded-full flex-row items-center gap-1" 
+              style={{ backgroundColor: '#FFF5F7' }}
+              onPress={async () => {
+                if (isJoining || !post.community?.id) return;
+                
+                // Optimistically update UI immediately
+                setIsMemberLocal(true);
+                
+                try {
+                  await joinCommunity(post.community.id).unwrap();
+                  Toast.show({
+                    type: 'success',
+                    text1: 'Joined successfully!',
+                    text2: `You are now a member of ${post.community.name}!`
+                  });
+                } catch (error: any) {
+                  // Revert on error
+                  setIsMemberLocal(false);
+                  Toast.show({
+                    type: 'error',
+                    text1: 'Join failed',
+                    text2: error?.data?.message || 'Unable to join community'
+                  });
+                }
+              }}
+              disabled={isJoining}
+            >
+              {isJoining ? (
+                <ActivityIndicator size="small" color="#E72858" />
+              ) : (
+                <>
+                  <UserRoundPlus size={18} color="#E72858" />
+                  <Text className="text-[#E72858] text-sm ml-1 font-semibold">Join</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )
+        )}
       </View>
 
       {/* Slider */}
@@ -169,7 +222,7 @@ const Details = () => {
       </View>
 
       <View className="px-4 mt-3">
-        <View className="flex-row items-center justify-between">
+<View className="flex-row items-center justify-between -mt-9">
           <View className="bg-white rounded-full py-3 px-4 flex-row items-center justify-between shadow-lg">
             <View className="flex-row items-center gap-6 px-1">
               <TouchableOpacity

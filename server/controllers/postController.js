@@ -291,17 +291,34 @@ exports.getUnifiedPosts = async (req, res) => {
             },
         });
 
-        // Formattage final
-        const formattedPosts = posts.map(post => {
+       
+        const formattedPosts = await Promise.all(posts.map(async (post) => {
             const rawPost = post.get({ plain: true });
+            
+            // Check if user is a member of this post's community (for HOME feed)
+            let postIsMember = false;
+            if (type === 'HOME' && currentUserId && rawPost.communityId) {
+                const membershipCheck = await CommunityMembership.findOne({
+                    where: {
+                        communityId: rawPost.communityId,
+                        userId: currentUserId
+                    }
+                });
+                postIsMember = !!membershipCheck;
+            } else if (type === 'COMMUNITY') {
+                // For community feed, use the context isMember
+                postIsMember = !!isMember;
+            }
+            
             return {
                 ...rawPost,
                 isLiked: rawPost.isLikedCount > 0, 
                 isSaved: rawPost.isSavedCount > 0,
+                isMember: postIsMember,
                 isLikedCount: undefined,
                 isSavedCount: undefined
             };
-        });
+        }));
 
         res.status(200).json({
             success: true,
@@ -572,12 +589,25 @@ exports.getPostById = async (req, res) => {
             where: { postId: postId, userId: currentUserId } 
         }) : null;
 
+        // Check if user is a member of this post's community
+        let isMember = false;
+        if (currentUserId && post.communityId) {
+            const membershipCheck = await CommunityMembership.findOne({
+                where: {
+                    communityId: post.communityId,
+                    userId: currentUserId
+                }
+            });
+            isMember = !!membershipCheck;
+        }
+
         const formattedPost = {
             ...rawPost,
             likesCount: rawPost.likedBy.length,
             sharesCount: rawPost.shares.length,
             totalCommentsCount: totalCommentsCount,
             isLiked: currentUserId ? rawPost.likedBy.some(like => like.userId === currentUserId) : false,
+            isMember: isMember,
             likedBy: undefined,
             shares: undefined,
             comments: commentsWithAggregates,

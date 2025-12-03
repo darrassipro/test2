@@ -1,4 +1,5 @@
 const { Community, Route, CommunityMembership } = require('../models/index'); 
+const { getUserRole } = require("../middleware/checkAdminRole");
 
 /**
  * @description Middleware pour vérifier les permissions de gérer les trajets (Routes).
@@ -9,7 +10,6 @@ const { Community, Route, CommunityMembership } = require('../models/index');
 const checkRouteAccess = (mode) => {
     return async (req, res, next) => {
         const userId = req.user.userId;
-        // On récupère le communityId soit du body (création) soit des params (gestion)
         const communityId = req.params.communityId || req.body.communityId; 
         const routeId = req.params.id; 
 
@@ -65,7 +65,7 @@ const checkRouteAccess = (mode) => {
             if (mode === 'manage' && routeId) {
                 const route = await Route.findByPk(routeId, {
                     // Nous DEVONS récupérer le creatorUserId du trajet
-                    attributes: ['id', 'communityId', 'creatorUserId'] 
+                    attributes: ['id', 'communityId', 'creatorUserId', 'status'] 
                 });
 
                 if (!route || route.communityId !== communityId) {
@@ -79,10 +79,12 @@ const checkRouteAccess = (mode) => {
                 
                 req.route = route; 
 
+                const userRole = await getUserRole(communityId, userId);
+                const isCommunityAdmin = userRole && ['owner', 'admin'].includes(userRole);
                 // Autorisation pour la Gestion : 
                 // 1. Être le créateur de la COMMUNAUTÉ (Admin) OU
                 // 2. Être le créateur du TRAJET (Propriétaire)
-                if (isCommunityCreator || isRouteCreator) {
+                if (isCommunityCreator ||isCommunityAdmin|| isRouteCreator) {
                     return next();
                 }
 

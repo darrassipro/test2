@@ -32,18 +32,13 @@ class ApiClient {
       'Content-Type': 'application/json',
     };
 
-    // Get auth token from localStorage if available
-    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-    if (token) {
-      defaultHeaders['Authorization'] = `Bearer ${token}`;
-    }
-
     const config: RequestInit = {
       ...options,
       headers: {
         ...defaultHeaders,
         ...options.headers,
       },
+      credentials: 'include', // Include cookies in requests
     };
 
     try {

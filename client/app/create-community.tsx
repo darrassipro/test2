@@ -12,8 +12,6 @@ import {
   FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { getToken } from '@/lib/tokenStorage';
-import { API_BASE_URL } from '@/constants/api';
 import { useCreateCommunityMutation } from '@/services/communityApi';
 import * as ImagePicker from 'expo-image-picker';
 import { Camera, ChevronDown } from 'lucide-react-native';
@@ -36,6 +34,7 @@ export default function CreateCommunity() {
   const [files, setFiles] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [isImagePicking, setIsImagePicking] = useState(false);
   const [createCommunity, { isLoading: isMutating }] = useCreateCommunityMutation();
 
   const [showCountryModal, setShowCountryModal] = useState(false);
@@ -44,22 +43,27 @@ export default function CreateCommunity() {
   const filteredCountries = COUNTRIES.filter(c => c.toLowerCase().includes(countrySearch.toLowerCase()));
 
   const handleImagePick = async (type: 'banner' | 'avatar') => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission requise', 'Nous avons besoin de la permission pour accéder aux photos.');
-      return;
-    }
+    try {
+      setIsImagePicking(true);
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission requise', 'Nous avons besoin de la permission pour accéder aux photos.');
+        return;
+      }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: type === 'avatar' ? [1, 1] : [16, 9],
-      quality: 0.8,
-    });
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: type === 'avatar' ? [1, 1] : [16, 9],
+        quality: 0.8,
+      });
 
-    if (!result.canceled && result.assets && result.assets[0]) {
-      if (type === 'avatar') setAvatarImage(result.assets[0].uri);
-      else setBannerImage(result.assets[0].uri);
+      if (!result.canceled && result.assets && result.assets[0]) {
+        if (type === 'avatar') setAvatarImage(result.assets[0].uri);
+        else setBannerImage(result.assets[0].uri);
+      }
+    } finally {
+      setIsImagePicking(false);
     }
   };
 
@@ -74,9 +78,11 @@ export default function CreateCommunity() {
         return;
       }
 
+      setIsImagePicking(true);
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission requise', 'Nous avons besoin de la permission pour accéder aux photos.');
+        setIsImagePicking(false);
         return;
       }
 
@@ -91,83 +97,67 @@ export default function CreateCommunity() {
       }
     } catch (err) {
       console.error('File pick error', err);
+    } finally {
+      setIsImagePicking(false);
     }
-
   };
 
-  const handleSubmit = () => {
-    (async () => {
-      if (!name.trim()) {
-        Toast.show({ type: 'error', text1: 'Erreur', text2: 'Le nom de la communauté est requis' });
-        return;
+  const handleSubmit = async () => {
+    if (!name.trim()) {
+      Toast.show({ type: 'error', text1: 'Erreur', text2: 'Le nom de la communauté est requis' });
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      setUploadProgress(0);
+
+      const formData = new FormData();
+      formData.append('name', name.trim());
+      formData.append('description', about.trim());
+      formData.append('country', country);
+      formData.append('socialLinks', JSON.stringify({ facebook, instagram, whatsapp }));
+
+      // Banner image
+      if (bannerImage) {
+        const filename = bannerImage.split('/').pop() || 'banner.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+        // @ts-ignore
+        formData.append('images', { uri: bannerImage, name: filename, type });
+        formData.append('roles', 'banner');
       }
 
-      try {
-        const token = await getToken();
-
-        const formData = new FormData();
-        formData.append('name', name.trim());
-        formData.append('description', about.trim());
-        formData.append('country', country);
-        formData.append('socialLinks', JSON.stringify({ facebook, instagram, whatsapp }));
-
-        if (bannerImage) {
-          const filename = bannerImage.split('/').pop() || 'banner.jpg';
-          const match = /\.(\w+)$/.exec(filename);
-          const type = match ? `image/${match[1]}` : 'image/jpeg';
-          // @ts-ignore
-          formData.append('files', { uri: bannerImage, name: filename, type });
-        }
-
-        if (avatarImage) {
-          const filename = avatarImage.split('/').pop() || 'avatar.jpg';
-          const match = /\.(\w+)$/.exec(filename);
-          const type = match ? `image/${match[1]}` : 'image/jpeg';
-          // @ts-ignore
-          formData.append('files', { uri: avatarImage, name: filename, type });
-        }
-
-        for (const uri of files) {
-          const filename = uri.split('/').pop() || 'file.jpg';
-          const match = /\.(\w+)$/.exec(filename);
-          const type = match ? `image/${match[1]}` : 'image/jpeg';
-          // @ts-ignore
-          formData.append('files', { uri, name: filename, type });
-        }
-
-        // Use RTK Query mutation to create the community (FormData)
-        setIsUploading(true);
-        setUploadProgress(0);
-
-        try {
-          // Prepare payload in the same shape communityApi expects, with explicit role for each file
-          const payload = {
-            name: name.trim(),
-            description: about.trim(),
-            country,
-            socialLinks: { facebook, instagram, whatsapp },
-            bannerImage: bannerImage ? { uri: bannerImage, name: bannerImage.split('/').pop(), type: 'image/jpeg', role: 'banner' } : null,
-            avatarImage: avatarImage ? { uri: avatarImage, name: avatarImage.split('/').pop(), type: 'image/jpeg', role: 'avatar' } : null,
-            files: files.map((uri) => ({ uri, name: uri.split('/').pop(), type: 'image/jpeg', role: 'gallery' })),
-          };
-
-          const res = await createCommunity(payload).unwrap();
-          setIsUploading(false);
-          Toast.show({ type: 'success', text1: 'Communauté créée', text2: res.message || `${name} a été créée avec succès.` });
-          router.replace('/(tabs)');
-        } catch (err) {
-          setIsUploading(false);
-          console.error('Create community mutation error', err);
-          const message = (err as any) && (err as any).data && (err as any).data.message ? (err as any).data.message : 'Échec de la création de la communauté';
-          Toast.show({ type: 'error', text1: 'Erreur', text2: message });
-        }
-      } catch (error) {
-        setIsUploading(false);
-        setUploadProgress(0);
-        console.error('Submit create community error', error);
-        Toast.show({ type: 'error', text1: 'Erreur', text2: 'Impossible de créer la communauté' });
+      // Avatar image
+      if (avatarImage) {
+        const filename = avatarImage.split('/').pop() || 'avatar.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+        // @ts-ignore
+        formData.append('images', { uri: avatarImage, name: filename, type });
+        formData.append('roles', 'avatar');
       }
-    })();
+
+      // Gallery files
+      for (const uri of files) {
+        const filename = uri.split('/').pop() || 'file.jpg';
+        const match = /\.(\w+)$/.exec(filename);
+        const type = match ? `image/${match[1]}` : 'image/jpeg';
+        // @ts-ignore
+        formData.append('images', { uri, name: filename, type });
+        formData.append('roles', 'gallery');
+      }
+
+      const res = await createCommunity(formData).unwrap();
+      setIsUploading(false);
+      Toast.show({ type: 'success', text1: 'Communauté créée', text2: res.message || `${name} a été créée avec succès.` });
+      router.replace('/(tabs)');
+    } catch (err) {
+      setIsUploading(false);
+      console.error('Create community mutation error', err);
+      const message = (err as any)?.data?.message || 'Échec de la création de la communauté';
+      Toast.show({ type: 'error', text1: 'Erreur', text2: message });
+    }
   };
   return (
     <View className="flex-1 bg-white">
@@ -328,15 +318,17 @@ export default function CreateCommunity() {
         )}
 
         <TouchableOpacity
-          disabled={isUploading}
+          disabled={isUploading || isImagePicking}
           onPress={handleSubmit}
-          style={{ opacity: isUploading ? 0.6 : 1 }}
+          style={{ opacity: (isUploading || isImagePicking) ? 0.6 : 1 }}
           className="w-full h-[50px] bg-[#E72858] rounded-[1200px] justify-center items-center"
         >
-          <Text className="text-[15px] font-bold text-white">{isUploading ? `Uploading ${uploadProgress}%` : 'Create'}</Text>
+          <Text className="text-[15px] font-bold text-white">
+            {isImagePicking ? 'Processing image...' : isUploading ? `Uploading ${uploadProgress}%` : 'Create'}
+          </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => router.back()} disabled={isUploading}>
+        <TouchableOpacity onPress={() => router.back()} disabled={isUploading || isImagePicking}>
           <Text className="text-[15px] font-semibold text-[#1F1F1F]">Cancel</Text>
         </TouchableOpacity>
       </View>

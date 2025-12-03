@@ -2,23 +2,20 @@ import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
 
-// Base query with auth token
+// Base query with HTTP-only cookies
 const baseQueryWithAuth = fetchBaseQuery({
   baseUrl: API_BASE_URL,
+  credentials: 'include', // Important: Send cookies with requests
   prepareHeaders: (headers) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
-    if (token) {
-      headers.set('authorization', `Bearer ${token}`);
-    }
+    // Cookies are automatically sent, no need to manually add token
     return headers;
   },
-  credentials: 'include',
 });
 
 // Create the main API
 export const api = createApi({
   reducerPath: 'api',
   baseQuery: baseQueryWithAuth,
-  tagTypes: ['User', 'Community', 'Post', 'Admin', 'Analytics', 'Booking'],
+  tagTypes: ['User', 'Community', 'Post', 'Story', 'Admin', 'Analytics', 'Booking', 'Creators'],
   endpoints: () => ({}),
 });

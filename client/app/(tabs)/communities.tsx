@@ -138,7 +138,7 @@ export default function Communities() {
 </TouchableOpacity>
 
               {filteredMy.map((community: any) => {
-                const avatarUrl = community.creator?.profileImage || getFileByRole(community.communityFiles, 'avatar') || 'https://via.placeholder.com/150';
+                const avatarUrl =  getFileByRole(community.communityFiles, 'avatar') || 'https://via.placeholder.com/150';
                 const bannerUrl = getFileByRole(community.communityFiles, 'banner') || 'https://via.placeholder.com/300';
                 const isOwner = user && community.creator && community.creator.id === user.id;
                 return (

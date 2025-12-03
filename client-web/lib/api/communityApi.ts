@@ -63,7 +63,39 @@ export const communityApi = api.injectEndpoints({
         url: `/communities/${id}/join`,
         method: 'POST',
       }),
+      invalidatesTags: ['Community', 'Post'],
+    }),
+
+    leaveCommunity: builder.mutation({
+      query: (id: string) => ({
+        url: `/communities/${id}/leave`,
+        method: 'POST',
+      }),
       invalidatesTags: ['Community'],
+    }),
+
+    getCommunitiesNotJoined: builder.query({
+      query: (params?: { page?: number; limit?: number; search?: string }) => ({
+        url: '/communities/not-joined',
+        params,
+      }),
+      providesTags: ['Community'],
+    }),
+
+    getUserCommunities: builder.query({
+      query: (params?: { page?: number; limit?: number; search?: string }) => ({
+        url: '/communities/user-joined',
+        params,
+      }),
+      providesTags: ['Community'],
+    }),
+
+    getCommunityMembers: builder.query({
+      query: ({ id, ...params }: { id: string; page?: number; limit?: number }) => ({
+        url: `/communities/${id}/members`,
+        params,
+      }),
+      providesTags: ['Community'],
     }),
   }),
 });
@@ -77,4 +109,8 @@ export const {
   useSuspendCommunityMutation,
   useActivateCommunityMutation,
   useJoinCommunityMutation,
+  useLeaveCommunityMutation,
+  useGetCommunitiesNotJoinedQuery,
+  useGetUserCommunitiesQuery,
+  useGetCommunityMembersQuery,
 } = communityApi;

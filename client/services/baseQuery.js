@@ -15,8 +15,20 @@ export const baseQuery = async (args, api, extraOptions) => {
 
       }
 
-      headers.set('Content-Type', 'application/json');
-      headers.set('Accept', 'application/json');
+      // Only set Content-Type if it's not already set and the body is not FormData
+      // FormData should NOT have Content-Type set manually - the browser/RN sets it with boundary
+      const isFormData = args?.body instanceof FormData || 
+                        (typeof args?.body === 'object' && args?.body?.constructor?.name === 'FormData');
+      
+      if (!isFormData && !headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/json');
+      }
+      
+      // Always accept JSON responses
+      if (!headers.has('Accept')) {
+        headers.set('Accept', 'application/json');
+      }
+      
       return headers;
     },
     credentials: 'include',

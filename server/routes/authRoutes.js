@@ -18,6 +18,7 @@ const {
   loginUser,
   verifyOTP,
   resendOTP,
+  logoutUser,
 } = require('../controllers/authController.js');
 
 const AuthRouter = express.Router();
@@ -128,6 +129,7 @@ AuthRouter.post('/login', loginValidation, loginUser);
 AuthRouter.post('/sendOTP', sendOtpValidation, sendOtp);
 AuthRouter.post('/verifyOTP', verifyOtpValidation, verifyOTP);
 AuthRouter.post('/resendOTP', resendOtpValidation, resendOTP);
+AuthRouter.post('/logout', logoutUser);
 
 module.exports = { authRouter: AuthRouter };
 
